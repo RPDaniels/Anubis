@@ -7,13 +7,11 @@
 <link rel="stylesheet" href="style.css">
 <script src="spectrum/jsspeccy/jsspeccy.js"></script>
 </head>
-<body>
+<body class="game">
 <div class="frieze"></div>
 <main>
-  <a class="back" href="index.html">← Anubis</a>
-  <h1>ANUBIS</h1>
-  <p class="sub">ZX Spectrum 48K · pulsa ▶ para arrancar (el sonido necesita ese clic)</p>
   <div class="emu-wrap"><div id="jsspeccy"></div></div>
+  <p class="sub"><a class="back" href="index.html">← Anubis</a> · ZX Spectrum 48K · pulsa ▶ para arrancar (el sonido necesita ese clic)</p>
   <div class="help">
     La melodía del título dura unos segundos; el menú responde cuando termina.
     <b>Menú:</b> <kbd>1</kbd> teclado, <kbd>0</kbd> empezar. <b>Mover:</b> cursores, <kbd>Q</kbd><kbd>A</kbd><kbd>O</kbd><kbd>P</kbd> o <kbd>5</kbd><kbd>6</kbd><kbd>7</kbd><kbd>8</kbd>.
@@ -24,10 +22,21 @@
 <footer>Emulador <a href="https://jsspeccy.zxdemo.org">JSSpeccy 3</a> de Matt Westcott, licencia GPL (ver spectrum/jsspeccy/COPYING.txt).</footer>
 <div class="frieze"></div>
 <script>
-  var zoom = window.innerWidth >= 800 ? 2 : 1;
-  JSSpeccy(document.getElementById('jsspeccy'), {
-    machine: 48, zoom: zoom, sandbox: true, autoStart: false,
+  // arranca maximizado: el mayor zoom entero que cabe en la ventana (pantalla 320x240 + barras del emulador)
+  function fitZoom() {
+    var z = Math.floor(Math.min(window.innerWidth / 320, (window.innerHeight - 64) / 240));
+    return Math.max(1, Math.min(z, 6));
+  }
+  var emu = JSSpeccy(document.getElementById('jsspeccy'), {
+    machine: 48, zoom: fitZoom(), sandbox: true, autoStart: false,
     openUrl: 'spectrum/anubis.z80'
+  });
+  var rz;
+  window.addEventListener('resize', function () {
+    clearTimeout(rz); rz = setTimeout(function () { emu.setZoom(fitZoom()); }, 150);
+  });
+  window.addEventListener('load', function () {
+    document.getElementById('jsspeccy').scrollIntoView({block: 'start'});
   });
 </script>
 </body>

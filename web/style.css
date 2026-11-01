@@ -38,3 +38,8 @@ kbd { background: #26222f; border: 1px solid #3a3446; border-bottom-width: 2px; 
 .back:hover { text-decoration: underline; }
 footer { text-align: center; color: #6c6759; font-size: .8rem; padding: 14px 16px 22px; }
 footer a { color: #8f8874; }
+
+/* game pages: the emulator fills the window */
+body.game main { padding: 0 8px 30px; max-width: none; }
+body.game .emu-wrap { margin: 0; min-height: calc(100vh - 12px); align-items: center; }
+body.game .help { max-width: 960px; margin: 16px auto 0; }
