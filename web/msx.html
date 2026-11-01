@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Anubis · MSX</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="frieze"></div>
+<main>
+  <a class="back" href="index.html">← Anubis</a>
+  <h1>ANUBIS</h1>
+  <p class="sub">MSX · haz clic en la pantalla si no se oye la música</p>
+  <div class="emu-wrap">
+    <div id="wmsx" style="text-align:center;">
+      <div id="wmsx-screen" style="box-shadow: 2px 2px 10px rgba(0,0,0,.7);"></div>
+    </div>
+  </div>
+  <div class="help">
+    La melodía del título dura unos segundos; el menú responde cuando termina.
+    <b>Menú:</b> <kbd>1</kbd> teclado, <kbd>2</kbd> joystick, <kbd>0</kbd> empezar. <b>Mover:</b> cursores.
+    <kbd>Espacio</kbd> para continuar en las pantallas finales.
+    Secretos: <kbd>3</kbd> monstruos inofensivos, <kbd>4</kbd> sin monstruos, <kbd>5</kbd> elegir pantalla.
+  </div>
+</main>
+<footer>Emulador <a href="https://webmsx.org">WebMSX</a> de Paulo Augusto Peccin, versión con <a href="http://cbios.sourceforge.net">C-BIOS</a>.</footer>
+<div class="frieze"></div>
+<script src="msx/wmsx.js"></script>
+<script>
+  WMSX.MACHINE = "MSX1E";
+  WMSX.CARTRIDGE1_URL = "msx/anubis.rom";
+  WMSX.MEDIA_CHANGE_DISABLED = true;
+</script>
+</body>
+</html>

@@ -1,0 +1,40 @@
+:root {
+  --bg: #0b0a10;
+  --panel: #15131d;
+  --gold: #e8c25a;
+  --gold-dim: #9c8340;
+  --lapis: #3f5fd6;
+  --cyan: #5fe0e8;
+  --red: #d8503c;
+  --text: #ece6d4;
+  --muted: #a39d8c;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; background: var(--bg); color: var(--text);
+  font-family: "Trebuchet MS", "Segoe UI", system-ui, sans-serif; }
+body { min-height: 100vh; display: flex; flex-direction: column; }
+.frieze { height: 12px; flex: none;
+  background: repeating-linear-gradient(90deg, var(--lapis) 0 12px, var(--gold) 12px 24px, var(--red) 24px 36px, var(--gold) 36px 48px); }
+main { flex: 1; width: 100%; max-width: 980px; margin: 0 auto; padding: 28px 16px 40px; }
+h1 { font-family: Georgia, "Times New Roman", serif; font-weight: normal; letter-spacing: .35em;
+  color: var(--gold); text-align: center; font-size: clamp(2rem, 7vw, 3.4rem); margin: 8px 0 4px; }
+.sub { text-align: center; color: var(--muted); margin: 0 0 28px; }
+.cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 20px; }
+.card { background: var(--panel); border: 1px solid #2a2636; border-top: 3px solid var(--gold);
+  border-radius: 6px; overflow: hidden; text-decoration: none; color: inherit; display: block;
+  transition: transform .15s, border-color .15s; }
+.card:hover, .card:focus-visible { transform: translateY(-3px); border-color: var(--gold); outline: none; }
+.card img { width: 100%; display: block; image-rendering: pixelated; aspect-ratio: 4 / 3; object-fit: cover; background: #000; }
+.card .body { padding: 14px 16px 18px; }
+.card h2 { margin: 0 0 6px; font-size: 1.25rem; color: var(--gold); }
+.card p { margin: 0; color: var(--muted); font-size: .95rem; line-height: 1.45; }
+.play { display: inline-block; margin-top: 12px; color: var(--cyan); font-weight: bold; }
+.help { margin-top: 30px; background: var(--panel); border-radius: 6px; padding: 16px 18px; color: var(--muted); line-height: 1.55; }
+.help b { color: var(--text); }
+kbd { background: #26222f; border: 1px solid #3a3446; border-bottom-width: 2px; border-radius: 4px;
+  padding: 0 6px; font-family: ui-monospace, Consolas, monospace; color: var(--text); font-size: .9em; }
+.emu-wrap { display: flex; justify-content: center; margin: 10px 0 18px; }
+.back { color: var(--gold); text-decoration: none; }
+.back:hover { text-decoration: underline; }
+footer { text-align: center; color: #6c6759; font-size: .8rem; padding: 14px 16px 22px; }
+footer a { color: #8f8874; }

@@ -1,0 +1,19 @@
+ANUBIS - versión web (MSX y ZX Spectrum)
+========================================
+
+Contenido
+  index.html       portada con las dos versiones
+  msx.html         MSX en WebMSX (C-BIOS): carga msx/anubis.rom (cartucho de 32 KB)
+  spectrum.html    Spectrum 48K en JSSpeccy 3: carga spectrum/anubis.z80
+  style.css, msx.png, spectrum.png
+
+Importante: hay que servirlo desde un servidor web. Abriendo index.html con doble clic
+(file://) los emuladores no pueden cargar el juego.
+
+Probar en tu ordenador
+  python3 -m http.server 8000      (dentro de esta carpeta)
+  y abre http://localhost:8000
+
+Emuladores incluidos
+  WebMSX 6.0.8 (versión C-BIOS) de Paulo Augusto Peccin - https://webmsx.org
+  JSSpeccy 3.2 de Matt Westcott - GPL v3 (spectrum/jsspeccy/COPYING.txt)

@@ -1,0 +1,8 @@
+Pruebas usadas durante el desarrollo
+  runshots.sh + shot.tcl : arrancan anubis_new.bin en openMSX (C-BIOS_MSX1), ejecutan un guion de acciones
+                           y vuelcan VRAM/RAM a PNG.  Uso: ./runshots.sh anubis_new.bin actO.tcl salida/
+  actO.tcl  muerte y pantalla de fin de partida (pantalla 6, 1 vida)
+  actP.tcl  recogida de tres ankh (pantalla 177)
+  actR.tcl  llegada al loto (pantalla 240)
+  zx_partida.py : versión Spectrum en el simulador zxsim (modo 5 -> pantalla indicada; "death" prueba la muerte)
+                  Uso (desde la carpeta con los .py y mons.sym): python3 zx_partida.py 240 lotus
