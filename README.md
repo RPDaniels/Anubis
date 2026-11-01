@@ -1,6 +1,9 @@
 # ANUBIS — juego retro para MSX y ZX Spectrum 48K
 
-Versión ampliada del juego MSX *Anubis*: decoración egipcia en todas las pantallas, monstruos, vidas, objetos que recoger, modos secretos, loto final y pantallas de fin de partida, más una conversión para ZX Spectrum 48K y una versión web jugable en el navegador.
+Juego MSX *Anubis*: Ayuda a nuestro intrépido aventurero a explorar un intrincado laberinto en un templo egipcio olvidado en la noche de los tiempos.
+Conversión para ZX Spectrum 48K y una versión web jugable en el navegador.
+
+<p align="center"> <a href="https://rpdaniels.github.io/Anubis/web/msx.html"> <img src="docs/capturas/msx_titulo.png" alt="Anubis — pantalla de título (MSX)" width="512"> </a> </p> <p align="center"> <a href="https://rpdaniels.github.io/Anubis/web/msx.html"><b>▶ Jugar versión MSX</b></a> &nbsp;·&nbsp; <a href="https://rpdaniels.github.io/Anubis/web/spectrum.html"><b>▶ Jugar versión ZX Spectrum</b></a> </p>
 
 ## Contenido del paquete
 
