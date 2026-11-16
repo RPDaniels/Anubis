@@ -23,7 +23,7 @@ def attr_table():
         t.append((bright << 6) | (paper << 3) | ink)
     return t
 
-RATE = 3500000 / 137            # TONE2 samples per second (137 T loop)
+RATE = 3500000 / 141            # TONE2 samples per second (141 T loop)
 def half(p):
     """AY period -> TONE2 half period (AY clock 1.7897725 MHz)"""
     if not p: return 0
@@ -1331,72 +1331,6 @@ RY1:    db 0
 
 ; ------------------------------------------------------------------ input
 ; GTSTCK: A = 0 keys / 1 Kempston  ->  A = MSX direction 0..8
-GTSTCK: push bc
-        ld c,a
-        call PRESENTQ
-        ld b,0                  ; bits: 0 up 1 down 2 left 3 right
-        ld a,0FBh
-        in a,(0FEh)
-        bit 0,a                 ; Q
-        jr nz,GS1
-        set 0,b
-GS1:    ld a,0FDh
-        in a,(0FEh)
-        bit 0,a                 ; A
-        jr nz,GS2
-        set 1,b
-GS2:    ld a,0DFh
-        in a,(0FEh)
-        bit 1,a                 ; O
-        jr nz,GS3
-        set 2,b
-GS3:    bit 0,a                 ; P
-        jr nz,GS4
-        set 3,b
-GS4:    ld a,0EFh
-        in a,(0FEh)
-        bit 3,a                 ; 7 up
-        jr nz,GS5
-        set 0,b
-GS5:    bit 4,a                 ; 6 down
-        jr nz,GS6
-        set 1,b
-GS6:    bit 2,a                 ; 8 right
-        jr nz,GS7
-        set 3,b
-GS7:    ld a,0F7h
-        in a,(0FEh)
-        bit 4,a                 ; 5 left
-        jr nz,GS8
-        set 2,b
-GS8:    ld a,c
-        or a
-        jr z,GS9
-        in a,(1Fh)              ; Kempston: 0 right 1 left 2 down 3 up
-        bit 3,a
-        jr z,GSa
-        set 0,b
-GSa:    bit 2,a
-        jr z,GSb
-        set 1,b
-GSb:    bit 1,a
-        jr z,GSc
-        set 2,b
-GSc:    bit 0,a
-        jr z,GS9
-        set 3,b
-GS9:    ld a,b
-        and 0Fh
-        ld c,a
-        ld b,0
-        push hl
-        ld hl,DIRTAB
-        add hl,bc
-        ld a,(hl)
-        pop hl
-        pop bc
-        ret
-DIRTAB: db 0,1,5,0,7,8,6,7,3,2,4,3,0,1,5,0
 PRESENTQ:
         ret
 GTTRIG: call PRESENTX
@@ -1565,6 +1499,115 @@ PRESENTX:
 PX1:    pop af
         ret
 
+; ---- sound loops: in uncontended memory, so their timing (and the pitch) is steady
+; ---- beeper tone: D = half period in samples (0: use E; both 0: silence), HL = duration
+; (L + 256*(H-1) samples of 137 T, ~25.5 kHz)
+TONE2:  di
+        ld a,d
+        or a
+        jr nz,T21
+        ld d,e
+T21:    ld a,10h
+        inc d
+        dec d
+        jr nz,T22
+        xor a                   ; silence
+        dec d
+T22:    ld (SMA+1),a
+        ld b,d
+        xor a
+T2L:    dec b
+        jr nz,T2A
+        ld b,d
+SMA:    xor 10h
+T2A:    out (0FEh),a
+        inc ix                  ; padding without memory access (the stack is in contended RAM)
+        dec ix
+        inc ix
+        dec ix
+        inc ix
+        dec ix
+        inc ix
+        dec ix
+        jp T2B
+T2B:    nop
+        nop
+        dec l
+        jr nz,T2L
+        dec h
+        jr nz,T2L
+        xor a
+        out (0FEh),a
+        ei
+        ret
+; ---- title tune: one clean square wave (phase accumulator, so the pitch is exact) that alternates
+; every ~20 ms between the melody (channel B) and the arpeggio (channel A), like the classic
+; two-voice beeper tunes; the shared phase keeps the switches click-free
+MUSIC:  call PRESENT
+        di
+        ld ix,NOTES
+        ld hl,0
+        ld a,{NNOTES}
+        ld (MUN),a
+MU1:    ld a,{NSEG}
+        ld (MUS),a
+MU2:    ld a,(MUS)
+        cp 1
+        jr nz,MU2a
+        ld de,0                 ; last slice of each note: silence, so repeated notes are heard apart
+        jr MU4
+MU2a:   and 1
+        ld a,(ix+0)
+        jr nz,MU3               ; odd segments: melody (low nibble)
+        rrca                    ; even segments: arpeggio (high nibble)
+        rrca
+        rrca
+        rrca
+MU3:    and 0Fh
+        add a,a
+        ld e,a
+        ld d,0
+        push hl
+        ld hl,STEPS
+        add hl,de
+        ld e,(hl)
+        inc hl
+        ld d,(hl)
+        pop hl
+MU4:    ld bc,{SEGLEN}
+MUL:    add hl,de
+        ld a,h
+        rrca
+        rrca
+        rrca
+        and 10h
+        out (0FEh),a
+        dec c
+        jr nz,MUL
+        dec b
+        jr nz,MUL
+        ld a,0F7h               ; a menu key (1-5 or 0) stops the tune at once
+        in a,(0FEh)
+        and 1Fh
+        cp 1Fh
+        jr nz,MUQ
+        ld a,0EFh
+        in a,(0FEh)
+        rra
+        jr nc,MUQ
+        ld a,(MUS)
+        dec a
+        ld (MUS),a
+        jr nz,MU2
+        inc ix
+        ld a,(MUN)
+        dec a
+        ld (MUN),a
+        jr nz,MU1
+MUQ:    xor a
+        out (0FEh),a
+        ei
+        ret
 HALEND:
 ; ---- above the IM2 table (FE00-FF00, built by INIT)
         org 0FF01h
@@ -1714,42 +1757,6 @@ INR0:   or 1
 HIEND:
 ; ---- sound code below the stack (loaded with the game image)
         org 7600h
-; ---- beeper tone: D = half period in samples (0: use E; both 0: silence), HL = duration
-; (L + 256*(H-1) samples of 137 T, ~25.5 kHz)
-TONE2:  di
-        ld a,d
-        or a
-        jr nz,T21
-        ld d,e
-T21:    ld a,10h
-        inc d
-        dec d
-        jr nz,T22
-        xor a                   ; silence
-        dec d
-T22:    ld (SMA+1),a
-        ld b,d
-        xor a
-T2L:    dec b
-        jr nz,T2A
-        ld b,d
-SMA:    xor 10h
-T2A:    out (0FEh),a
-        ex (sp),hl
-        ex (sp),hl
-        ex (sp),hl
-        ex (sp),hl
-        jp T2B
-T2B:    nop
-        nop
-        dec l
-        jr nz,T2L
-        dec h
-        jr nz,T2L
-        xor a
-        out (0FEh),a
-        ei
-        ret
 ; ---- AY emulation for the game's sound effects: register writes go to a shadow,
 ; the waits play the current tones of channels A and B on the beeper
 PSGR:   ds 16
@@ -1843,74 +1850,6 @@ HWAITP: push bc                 ; refresh the screen, then wait
 HPSGDLY: call PRESENT           ; countdown blip (screen + ~5 ms of tone)
         ld hl,{BLIPLEN}
         jp SFX
-; ---- title tune: one clean square wave (phase accumulator, so the pitch is exact) that alternates
-; every ~20 ms between the melody (channel B) and the arpeggio (channel A), like the classic
-; two-voice beeper tunes; the shared phase keeps the switches click-free
-MUSIC:  call PRESENT
-        di
-        ld ix,NOTES
-        ld hl,0
-        ld a,{NNOTES}
-        ld (MUN),a
-MU1:    ld a,{NSEG}
-        ld (MUS),a
-MU2:    ld a,(MUS)
-        cp 1
-        jr nz,MU2a
-        ld de,0                 ; last slice of each note: silence, so repeated notes are heard apart
-        jr MU4
-MU2a:   and 1
-        ld a,(ix+0)
-        jr nz,MU3               ; odd segments: melody (low nibble)
-        rrca                    ; even segments: arpeggio (high nibble)
-        rrca
-        rrca
-        rrca
-MU3:    and 0Fh
-        add a,a
-        ld e,a
-        ld d,0
-        push hl
-        ld hl,STEPS
-        add hl,de
-        ld e,(hl)
-        inc hl
-        ld d,(hl)
-        pop hl
-MU4:    ld bc,{SEGLEN}
-MUL:    add hl,de
-        ld a,h
-        rrca
-        rrca
-        rrca
-        and 10h
-        out (0FEh),a
-        dec c
-        jr nz,MUL
-        dec b
-        jr nz,MUL
-        ld a,0F7h               ; a menu key (1-5 or 0) stops the tune at once
-        in a,(0FEh)
-        and 1Fh
-        cp 1Fh
-        jr nz,MUQ
-        ld a,0EFh
-        in a,(0FEh)
-        rra
-        jr nc,MUQ
-        ld a,(MUS)
-        dec a
-        ld (MUS),a
-        jr nz,MU2
-        inc ix
-        ld a,(MUN)
-        dec a
-        ld (MUN),a
-        jr nz,MU1
-MUQ:    xor a
-        out (0FEh),a
-        ei
-        ret
 MUN:    db 0
 MUS:    db 0
 STEPS:
@@ -1918,6 +1857,73 @@ STEPS:
 NOTES:
 {NOTES}
 
+; GTSTCK (joystick/keys) lives here, in the low part of the image
+GTSTCK: push bc
+        ld c,a
+        call PRESENTQ
+        ld b,0                  ; bits: 0 up 1 down 2 left 3 right
+        ld a,0FBh
+        in a,(0FEh)
+        bit 0,a                 ; Q
+        jr nz,GS1
+        set 0,b
+GS1:    ld a,0FDh
+        in a,(0FEh)
+        bit 0,a                 ; A
+        jr nz,GS2
+        set 1,b
+GS2:    ld a,0DFh
+        in a,(0FEh)
+        bit 1,a                 ; O
+        jr nz,GS3
+        set 2,b
+GS3:    bit 0,a                 ; P
+        jr nz,GS4
+        set 3,b
+GS4:    ld a,0EFh
+        in a,(0FEh)
+        bit 3,a                 ; 7 up
+        jr nz,GS5
+        set 0,b
+GS5:    bit 4,a                 ; 6 down
+        jr nz,GS6
+        set 1,b
+GS6:    bit 2,a                 ; 8 right
+        jr nz,GS7
+        set 3,b
+GS7:    ld a,0F7h
+        in a,(0FEh)
+        bit 4,a                 ; 5 left
+        jr nz,GS8
+        set 2,b
+GS8:    ld a,c
+        or a
+        jr z,GS9
+        in a,(1Fh)              ; Kempston: 0 right 1 left 2 down 3 up
+        bit 3,a
+        jr z,GSa
+        set 0,b
+GSa:    bit 2,a
+        jr z,GSb
+        set 1,b
+GSb:    bit 1,a
+        jr z,GSc
+        set 2,b
+GSc:    bit 0,a
+        jr z,GS9
+        set 3,b
+GS9:    ld a,b
+        and 0Fh
+        ld c,a
+        ld b,0
+        push hl
+        ld hl,DIRTAB
+        add hl,bc
+        ld a,(hl)
+        pop hl
+        pop bc
+        ret
+DIRTAB: db 0,1,5,0,7,8,6,7,3,2,4,3,0,1,5,0
 LOEND:
 '''
 
