@@ -5,6 +5,7 @@
 import struct, subprocess, sys
 B = 0x8500
 HAL = 0xF400
+IMGBASE = 0x7600              # the loaded image starts with the sound code at 7600
 DELAY_LO, DELAY_HI = 0x01, 0x00   # the loop is paced by HALMON (interrupt credits) instead
 FRAMECREDIT, LOOPCOST, CREDMAX = 23, 10, 40
 SH = 0x6000                # shadow VRAM: pat 0000 / name 0800 / sat 0B00 / col 0B80 / spr 0BA0
@@ -42,7 +43,8 @@ def music_table(d):
     out = []
     for i in range(0, len(x), 4):
         a, b = step(x[i] | x[i + 1] << 8), step(x[i + 2] | x[i + 3] << 8)
-        out.append((a or b, b or a))
+        m = b or a                  # one clean voice: the melody, or the arpeggio where there is none
+        out.append((m, m))
     return out
 
 ASM = r'''
@@ -52,6 +54,26 @@ SHNT    equ SH+0800h
 SHSAT   equ SH+0B00h
 SHCOL   equ SH+0B80h
 SHSPR   equ SH+0BA0h
+NRX     equ 7400h           ; sprite slot work area (free RAM below the stack)
+SST     equ 7410h
+CHG     equ 7420h
+ENDF    equ 7424h
+SROWS   equ 7430h           ; 4 slots x 30 rows x 3 bytes of shifted sprite
+SPYS     equ 75A0h
+SPAS     equ 75A4h
+TCS     equ 75A8h
+CURS    equ 75B8h
+SROW    equ 75BAh           ; pointer to the current slot's buffer
+CCX     equ 75C0h
+CCY     equ 75C1h
+CCN     equ 75C2h
+CCA     equ 75C3h
+CCI     equ 75C4h
+TCX0    equ 75C6h
+TCX1    equ 75C7h
+TCY0    equ 75C8h
+TCY1    equ 75C9h
+ATTRTAB equ 7800h           ; MSX colour byte -> Spectrum attribute (built by INIT)
         org {HAL}h
 ; ------------------------------------------------------------------ start-up
 INIT:   di
@@ -68,6 +90,52 @@ INIT:   di
         ldir
         xor a
         out (0FEh),a
+        ld hl,ATTRTAB           ; attribute table: ink/paper/bright from the MSX colour byte
+        ld c,0
+AT1:    push hl
+        ld a,c
+        rrca
+        rrca
+        rrca
+        rrca
+        and 0Fh
+        ld e,a
+        ld d,0
+        ld hl,ZXC
+        add hl,de
+        ld b,(hl)               ; foreground: bit 3 bright, bits 0-2 colour
+        ld a,c
+        and 0Fh
+        ld e,a
+        ld hl,ZXC
+        add hl,de
+        ld d,(hl)               ; background
+        pop hl
+        ld a,d
+        and 7
+        rlca
+        rlca
+        rlca
+        ld e,a
+        ld a,b
+        and 7
+        or e
+        ld e,a
+        ld a,c
+        and 0F0h
+        cp 20h
+        ld a,b
+        jr nc,AT2
+        ld a,d
+AT2:    and 8
+        rlca
+        rlca
+        rlca
+        or e
+        ld (hl),a
+        inc hl
+        inc c
+        jr nz,AT1
         ld hl,0FE00h            ; IM2 vector table -> FDFDh
         ld de,0FE01h
         ld bc,256
@@ -97,17 +165,26 @@ ISR:    push af
         jr c,ISR1
         ld a,{CREDMAX}
 ISR1:   ld (CREDIT),a
-        pop hl
+        ld a,(PBUSY)            ; during the game: refresh the sprites right here, at the start of
+        or a                    ; the frame, so they are finished before the beam reaches the picture
+        jr nz,ISR9
+        ld a,(JIF)
+        ld hl,LASTH
+        sub (hl)
+        cp 3
+        call c,PRESENT
+ISR9:   pop hl
         pop af
         ei
         reti
 JIF:    dw 0
 CREDIT: db 0
-LASTP:  db 0
+PBUSY:  db 0
+FRAMEP: db 0
 LASTH:  db 0F0h
 FULL:   db 1
-NREC:   db 0
-REC:    ds 4*8
+NREC:   db 4                    ; 4 sprite slots; an undrawn slot has the empty rectangle FF,FF,0,0
+REC:    db 0FFh,0FFh,0,0,0FFh,0FFh,0,0,0FFh,0FFh,0,0,0FFh,0FFh,0,0
 
 ; ------------------------------------------------------------------ VRAM address translation
 ; in: HL = VRAM address   out: HL = shadow address, A = region (1 pat, 2 name, 3 sat, 4 col, 5 spr), Z if ignored
@@ -330,8 +407,7 @@ I32a:   ld (hl),0D1h
 I32b:   ld (hl),a
         inc hl
         djnz I32b
-        xor a
-        ld (NREC),a
+        call RECCLR
         ld a,1
         ld (FULL),a
         ret
@@ -400,12 +476,37 @@ RENDER: call CELLINFO
         add a,a
         or 40h
         ld h,a
-        ld b,8
-RE1:    ld a,(de)
+RE1:
+        ld a,(de)
         ld (hl),a
         inc de
         inc h
-        djnz RE1
+        ld a,(de)
+        ld (hl),a
+        inc de
+        inc h
+        ld a,(de)
+        ld (hl),a
+        inc de
+        inc h
+        ld a,(de)
+        ld (hl),a
+        inc de
+        inc h
+        ld a,(de)
+        ld (hl),a
+        inc de
+        inc h
+        ld a,(de)
+        ld (hl),a
+        inc de
+        inc h
+        ld a,(de)
+        ld (hl),a
+        inc de
+        inc h
+        ld a,(de)
+        ld (hl),a
         ret
 
 PRESENT:
@@ -415,12 +516,14 @@ PRESENT:
         push hl
         push ix
         push iy
+        ld a,1
+        ld (PBUSY),a
         ld a,(FULL)
         or a
         jr z,PR1
         xor a
         ld (FULL),a
-        ld (NREC),a
+        call RECCLR
         ld hl,0
 PR0:    push hl
         call RENDER
@@ -430,64 +533,11 @@ PR0:    push hl
         cp 3
         jr nz,PR0
         jr PR3
-PR1:    ld a,(NREC)             ; erase the sprites drawn last time
-        or a
-        jr z,PR3
-        ld b,a
-        ld ix,REC
-PR2:    push bc
-        ld c,(ix+1)             ; cy
-PR2y:   ld b,(ix+0)             ; cx
-PR2x:   ld a,c
-        cp 24
-        jr nc,PR2n
-        ld a,b
-        cp 32
-        jr nc,PR2n
-        ld l,c
-        ld h,0
-        add hl,hl
-        add hl,hl
-        add hl,hl
-        add hl,hl
-        add hl,hl
-        ld e,b
-        ld d,0
-        add hl,de
-        push bc
-        call RENDER
-        pop bc
-PR2n:   inc b
-        ld a,(ix+2)
-        cp b
-        jr nc,PR2x
-        inc c
-        ld a,(ix+3)
-        cp c
-        jr nc,PR2y
-        ld de,4
-        add ix,de
-        pop bc
-        djnz PR2
-        xor a
-        ld (NREC),a
-PR3:    ld ix,SHSAT             ; draw the sprites
-        ld b,32
-PR4:    ld a,(ix+0)
-        cp 0D0h
-        jr z,PR9
-        cp 0C0h
-        jr nc,PR5
-        ld a,(ix+3)
-        and 0Fh
-        jr z,PR5
-        push bc
-        call DRAWSPR
-        pop bc
-PR5:    ld de,4
-        add ix,de
-        djnz PR4
-PR9:    pop iy
+PR1:
+PR3:    call SPRS
+PR9:    xor a
+        ld (PBUSY),a
+        pop iy
         pop ix
         pop hl
         pop de
@@ -495,8 +545,359 @@ PR9:    pop iy
         pop af
         ret
 
+; ---- sprites: only the slots that changed (or touch one that changed) are erased and redrawn
+SPRS:   xor a
+        ld (ENDF),a
+        ld ix,SHSAT             ; 1: new rectangles and "changed" flags
+        ld b,0
+SS1:    push bc
+        call SLOTP
+        ld a,(ix+0)
+        cp 0D0h
+        jr nz,SS2
+        ld a,1
+        ld (ENDF),a
+SS2:    ld a,(ENDF)
+        or a
+        jr nz,SSinv
+        ld a,(ix+0)
+        cp 0C0h
+        jr nc,SSinv
+        ld a,(ix+3)
+        and 0Fh
+        jr z,SSinv
+        push hl
+        push de
+        call RECTOF
+        pop de
+        pop hl
+        ld a,(RX0)
+        ld (iy+0),a
+        ld a,(RY0)
+        ld (iy+1),a
+        ld a,(RX1)
+        ld (iy+2),a
+        ld a,(RY1)
+        ld (iy+3),a
+        ld a,(de)
+        cp 0FFh
+        jr z,SSch
+        ld a,(ix+0)
+        cp (hl)
+        jr nz,SSch
+        inc hl
+        ld a,(ix+1)
+        cp (hl)
+        jr nz,SSch
+        inc hl
+        ld a,(ix+2)
+        cp (hl)
+        jr nz,SSch
+        inc hl
+        ld a,(ix+3)
+        cp (hl)
+        jr nz,SSch
+        xor a
+        jr SSst
+SSinv:  ld (iy+0),0FFh
+        ld (iy+1),0FFh
+        ld (iy+2),0
+        ld (iy+3),0
+        ld a,(de)
+        cp 0FFh
+        ld a,0
+        jr z,SSst
+SSch:   ld a,1
+SSst:   pop bc
+        ld hl,CHG
+        ld e,b
+        ld d,0
+        add hl,de
+        ld (hl),a
+        ld de,4
+        add ix,de
+        inc b
+        ld a,b
+        cp 4
+        jp nz,SS1
+        ld a,(FRAMEP)           ; at most half the slots per frame: explorer + first monster,
+        xor 1                   ; then the second monster (each sprite moves at 25 Hz)
+        ld (FRAMEP),a
+        ld hl,CHG
+        jr z,PF0
+        ld (hl),0
+        inc hl
+        ld (hl),0
+        jr PF1
+PF0:    inc hl
+        inc hl
+        ld (hl),0
+        inc hl
+        ld (hl),0
+PF1:
+        ld b,0                  ; 2: a sprite under a changed one must be redrawn too
+S2a:    push bc
+        call SLOTP
+        push de
+        pop ix                  ; IX = old rectangle of slot b
+        ld hl,CHG
+        ld e,b
+        ld d,0
+        add hl,de
+        ld a,(hl)
+        or a
+        jr nz,S2n
+        ld a,(ix+0)
+        cp 0FFh
+        jr z,S2n
+        push hl
+        ld c,0
+S2b:    ld hl,CHG
+        ld e,c
+        ld d,0
+        add hl,de
+        ld a,(hl)
+        or a
+        jr z,S2c
+        ld a,c
+        add a,a
+        add a,a
+        ld e,a
+        ld iy,REC
+        add iy,de
+        call OVL
+        jr z,S2m
+        ld iy,NRX
+        add iy,de
+        call OVL
+        jr z,S2m
+S2c:    inc c
+        ld a,c
+        cp 4
+        jr nz,S2b
+        pop hl
+        jr S2n
+S2m:    pop hl
+        ld (hl),1
+S2n:    pop bc
+        inc b
+        ld a,b
+        cp 4
+        jr nz,S2a
+        ld b,0                  ; 3: erase the old rectangles of the changed slots
+S3a:    push bc
+        ld hl,CHG
+        ld e,b
+        ld d,0
+        add hl,de
+        ld a,(hl)
+        or a
+        jr z,S3n
+        call SLOTP
+        push de
+        pop ix
+        ld a,(ix+0)
+        cp 0FFh
+        call nz,ERASER
+S3n:    pop bc
+        inc b
+        ld a,b
+        cp 4
+        jr nz,S3a
+        ld b,0                  ; 4: build the changed sprites (shifted rows, rectangles)
+S4a:    push bc
+        ld hl,CHG
+        ld e,b
+        ld d,0
+        add hl,de
+        ld a,(hl)
+        or a
+        call nz,DRAWSLOT
+        pop bc
+        inc b
+        ld a,b
+        cp 4
+        jr nz,S4a
+        ld b,0                  ; 5: write their cells (background + every sprite on the cell)
+S5a:    push bc
+        ld hl,CHG
+        ld e,b
+        ld d,0
+        add hl,de
+        ld a,(hl)
+        or a
+        jr z,S5n
+        ld a,b
+        add a,a
+        add a,a
+        ld e,a
+        ld hl,NRX
+        add hl,de
+        ld a,(hl)
+        cp 0FFh
+        jr z,S5n
+        ld a,b
+        ld (CURS),a
+        call COMPOSE
+S5n:    pop bc
+        inc b
+        ld a,b
+        cp 4
+        jr nz,S5a
+        ret
+; DRAWSLOT: B = slot
+DRAWSLOT:
+        call SLOTP              ; HL = SST slot, DE = REC slot, IY = NRX slot
+        push hl
+        push de
+        ld a,b
+        add a,a
+        add a,a
+        ld e,a
+        ld d,0
+        ld ix,SHSAT
+        add ix,de
+        ld a,b
+        ld (CURS),a
+        ld a,(iy+0)
+        cp 0FFh
+        call nz,DRAWSPR
+        pop de
+        pop hl
+        push iy                 ; REC slot = new rectangle
+        pop bc
+        ld a,(bc)
+        ld (de),a
+        inc bc
+        inc de
+        ld a,(bc)
+        ld (de),a
+        inc bc
+        inc de
+        ld a,(bc)
+        ld (de),a
+        inc bc
+        inc de
+        ld a,(bc)
+        ld (de),a
+        ld a,(ix+0)             ; SST slot = what was drawn
+        ld (hl),a
+        inc hl
+        ld a,(ix+1)
+        ld (hl),a
+        inc hl
+        ld a,(ix+2)
+        ld (hl),a
+        inc hl
+        ld a,(ix+3)
+        ld (hl),a
+        ret
+; OTHERS: OR into cell (CCX, CCY) the other sprites built this frame that cover it
+OTHERS: ld b,0
+OT1:    ld a,(CURS)
+        cp b
+        jp z,OT9
+        ld hl,CHG
+        ld e,b
+        ld d,0
+        add hl,de
+        ld a,(hl)
+        or a
+        jp z,OT9
+        ld a,b
+        add a,a
+        add a,a
+        ld e,a
+        ld iy,NRX
+        add iy,de
+        ld a,(CCX)
+        cp (iy+0)
+        jp c,OT9
+        ld a,(iy+2)
+        ld hl,CCX
+        cp (hl)
+        jp c,OT9
+        ld a,(CCY)
+        cp (iy+1)
+        jp c,OT9
+        ld a,(iy+3)
+        ld hl,CCY
+        cp (hl)
+        jp c,OT9
+        push bc
+        ld a,(CCX)              ; offset = (cell row - its top + 7) * 3 + (column - its x0)
+        sub (iy+0)
+        ld c,a
+        ld e,b
+        ld d,0
+        ld hl,SPYS
+        add hl,de
+        ld a,(CCY)
+        add a,a
+        add a,a
+        add a,a
+        sub (hl)
+        add a,7
+        ld l,a
+        add a,a
+        add a,l
+        add a,c
+        push af
+        ld a,b
+        call SRBASE
+        pop af
+        ld e,a
+        ld d,0
+        add hl,de
+        push hl
+        pop iy
+        ld hl,(CCI)
+        ld a,h
+        add a,a
+        add a,a
+        add a,a
+        or 40h
+        ld h,a
+        ld a,(hl)
+        or (iy+0)
+        ld (hl),a
+        inc h
+        ld a,(hl)
+        or (iy+3)
+        ld (hl),a
+        inc h
+        ld a,(hl)
+        or (iy+6)
+        ld (hl),a
+        inc h
+        ld a,(hl)
+        or (iy+9)
+        ld (hl),a
+        inc h
+        ld a,(hl)
+        or (iy+12)
+        ld (hl),a
+        inc h
+        ld a,(hl)
+        or (iy+15)
+        ld (hl),a
+        inc h
+        ld a,(hl)
+        or (iy+18)
+        ld (hl),a
+        inc h
+        ld a,(hl)
+        or (iy+21)
+        ld (hl),a
+        inc h
+        pop bc
+OT9:    inc b
+        ld a,b
+        cp 4
+        jp nz,OT1
+        ret
 ; DRAWSPR: IX -> SAT entry (y, x, pattern, colour)
-DRAWSPR:
+DRAWSPR:                        ; composite: each cell = background + sprite, written once
         ld a,(ix+0)
         inc a
         ld (SPY),a
@@ -512,83 +913,6 @@ DRAWSPR:
         ld de,SHSPR
         add hl,de
         ld (SPP),hl
-        ld c,0                  ; row k
-DS1:    ld a,(SPY)
-        add a,c
-        cp 192
-        jr nc,DS8
-        ld (SPROW),a
-        ld hl,(SPP)
-        ld e,c
-        ld d,0
-        add hl,de
-        ld a,(hl)               ; left byte
-        ld de,16
-        add hl,de
-        ld d,(hl)               ; right byte
-        ld e,0
-        ld b,a
-        ld a,(SPX)
-        and 7
-        jr z,DS3
-        push bc
-        ld c,b
-        ld b,a
-DS2:    srl c
-        rr d
-        rr e
-        djnz DS2
-        ld a,c
-        pop bc
-        ld b,a
-DS3:    ; screen address of (SPROW, SPX>>3)
-        ld a,(SPROW)
-        and 0C0h
-        rrca
-        rrca
-        rrca
-        ld h,a
-        ld a,(SPROW)
-        and 7
-        or h
-        or 40h
-        ld h,a
-        ld a,(SPROW)
-        and 38h
-        add a,a
-        add a,a
-        ld l,a
-        ld a,(SPX)
-        rrca
-        rrca
-        rrca
-        and 1Fh
-        push af
-        or l
-        ld l,a
-        ld a,(hl)
-        or b
-        ld (hl),a
-        pop af
-        cp 31
-        jr z,DS8
-        inc l
-        push af
-        ld a,(hl)
-        or d
-        ld (hl),a
-        pop af
-        cp 30
-        jr z,DS8
-        inc l
-        ld a,(hl)
-        or e
-        ld (hl),a
-DS8:    inc c
-        ld a,c
-        cp 16
-        jr nz,DS1
-        ; colour the empty background cells under the sprite, record the rectangle
         ld a,(ix+3)
         and 0Fh
         add a,a
@@ -602,66 +926,260 @@ DS8:    inc c
         add hl,de
         ld a,(hl)
         ld (SPA),a
-        ld a,(SPX)
-        rrca
-        rrca
-        rrca
-        and 1Fh
-        ld (RX0),a
-        ld a,(SPX)
-        add a,15
-        jr nc,DA0
-        ld a,0FFh
-DA0:    rrca
-        rrca
-        rrca
-        and 1Fh
-        ld (RX1),a
-        ld a,(SPY)
-        rrca
-        rrca
-        rrca
-        and 1Fh
-        ld (RY0),a
-        ld a,(SPY)
-        add a,15
-        rrca
-        rrca
-        rrca
-        and 1Fh
-        ld (RY1),a
-        ld a,(NREC)
-        cp 8
-        jr nc,DA1
-        ld l,a
-        inc a
-        ld (NREC),a
-        ld h,0
-        add hl,hl
-        add hl,hl
-        ld de,REC
+        call RECTOF
+        ld a,(CURS)             ; shifted sprite rows, with 7 empty rows above and below
+        call SRBASE
+        ld (SROW),hl
+        ld b,21
+SR0:    ld (hl),0
+        inc hl
+        djnz SR0
+        ld de,48
         add hl,de
-        ld a,(RX0)
-        ld (hl),a
+        ld b,21
+SR1:    ld (hl),0
         inc hl
-        ld a,(RY0)
-        ld (hl),a
-        inc hl
-        ld a,(RX1)
-        ld (hl),a
-        inc hl
-        ld a,(RY1)
-        ld (hl),a
-DA1:    ld a,(RY0)
+        djnz SR1
+        ld a,(SPX)
+        and 7
         ld c,a
-DA2:    ld a,c
+        add a,a
+        add a,c
+        add a,a
+        neg
+        add a,42
+        ld (DSJ+1),a
+        xor a
+        ld (TCM),a
+        dec a
+        ld (TFIRST),a
+        push ix
+        ld ix,(SPP)
+        ld hl,(SROW)
+        ld de,21
+        add hl,de
+        ld b,16
+DNL:    ld c,(ix+0)
+        ld d,(ix+16)
+        ld e,0
+DSJ:    jr DSH
+DSH:
+        srl c
+        rr d
+        rr e
+        srl c
+        rr d
+        rr e
+        srl c
+        rr d
+        rr e
+        srl c
+        rr d
+        rr e
+        srl c
+        rr d
+        rr e
+        srl c
+        rr d
+        rr e
+        srl c
+        rr d
+        rr e
+        ld (hl),c
+        inc hl
+        ld (hl),d
+        inc hl
+        ld (hl),e
+        inc hl
+        ld a,c
+        or a
+        jr z,DM1
+        ld a,(TCM)
+        or 1
+        ld (TCM),a
+DM1:    ld a,d
+        or a
+        jr z,DM2
+        ld a,(TCM)
+        or 2
+        ld (TCM),a
+DM2:    ld a,e
+        or a
+        jr z,DM3
+        ld a,(TCM)
+        or 4
+        ld (TCM),a
+DM3:    ld a,c
+        or d
+        or e
+        jr z,DM4
+        ld a,b
+        ld (TLAST),a
+        ld a,(TFIRST)
+        inc a
+        jr nz,DM4
+        ld a,b
+        ld (TFIRST),a
+DM4:    inc ix
+        dec b
+        jp nz,DNL
+        pop ix
+        ld a,(TCM)              ; the cells that really have pixels
+        or a
+        jr nz,TK1
+        ld a,0FFh
+        ld (TCY0),a
+        xor a
+        ld (TCY1),a
+        jr TK9
+TK1:    ld b,a
+        ld a,(SPX)
+        rrca
+        rrca
+        rrca
+        and 1Fh
+        ld c,a
+        bit 0,b
+        jr nz,TK2
+        inc a
+        bit 1,b
+        jr nz,TK2
+        inc a
+TK2:    ld (TCX0),a
+        ld a,c
+        bit 2,b
+        jr z,TK3
+        add a,2
+        jr TK4
+TK3:    bit 1,b
+        jr z,TK4
+        inc a
+TK4:    ld (TCX1),a
+        ld a,(TFIRST)
+        ld b,a
+        ld a,16
+        sub b
+        ld b,a
+        ld a,(SPY)
+        add a,b
+        rrca
+        rrca
+        rrca
+        and 1Fh
+        ld (TCY0),a
+        ld a,(TLAST)
+        ld b,a
+        ld a,16
+        sub b
+        ld b,a
+        ld a,(SPY)
+        add a,b
+        rrca
+        rrca
+        rrca
+        and 1Fh
+        ld (TCY1),a
+TK9:    ld a,(CURS)             ; keep this sprite's data in its slot
+        ld e,a
+        ld d,0
+        ld hl,SPYS
+        add hl,de
+        ld a,(SPY)
+        ld (hl),a
+        ld hl,SPAS
+        add hl,de
+        ld a,(SPA)
+        ld (hl),a
+        ld a,e
+        add a,a
+        add a,a
+        ld e,a
+        ld hl,TCS
+        add hl,de
+        ld a,(TCX0)
+        ld (hl),a
+        inc hl
+        ld a,(TCX1)
+        ld (hl),a
+        inc hl
+        ld a,(TCY0)
+        ld (hl),a
+        inc hl
+        ld a,(TCY1)
+        ld (hl),a
+        ret
+; SRBASE: A = slot -> HL = its shifted-row buffer
+SRBASE: add a,a
+        ld e,a
+        ld d,0
+        ld hl,SRTAB
+        add hl,de
+        ld e,(hl)
+        inc hl
+        ld d,(hl)
+        ex de,hl
+        ret
+SRTAB:  dw SROWS, SROWS+90, SROWS+180, SROWS+270
+; COMPOSE: slot (CURS) -> its rectangle's cells written with background + sprites
+COMPOSE:
+        ld a,(CURS)
+        ld e,a
+        ld d,0
+        ld hl,SPYS
+        add hl,de
+        ld a,(hl)
+        ld (SPY),a
+        ld hl,SPAS
+        add hl,de
+        ld a,(hl)
+        ld (SPA),a
+        ld a,e
+        add a,a
+        add a,a
+        ld e,a
+        ld hl,TCS
+        add hl,de
+        ld a,(hl)
+        ld (TCX0),a
+        inc hl
+        ld a,(hl)
+        ld (TCX1),a
+        inc hl
+        ld a,(hl)
+        ld (TCY0),a
+        inc hl
+        ld a,(hl)
+        ld (TCY1),a
+        ld hl,NRX
+        add hl,de
+        ld a,(hl)
+        ld (RX0),a
+        inc hl
+        ld a,(hl)
+        ld (RY0),a
+        inc hl
+        ld a,(hl)
+        ld (RX1),a
+        inc hl
+        ld a,(hl)
+        ld (RY1),a
+        ld a,(CURS)
+        call SRBASE
+        ld (SROW),hl
+        ld a,(RY0)
+        ld c,a
+CC2:    ld a,c
         cp 24
         ret nc
         ld a,(RX0)
         ld b,a
-DA3:    ld a,b
+CC3:    ld a,b
         cp 32
-        jr nc,DA5
+        jp nc,CC8
+        ld (CCX),a
+        ld a,c
+        ld (CCY),a
+        push bc
         ld l,c
         ld h,0
         add hl,hl
@@ -672,31 +1190,136 @@ DA3:    ld a,b
         ld e,b
         ld d,0
         add hl,de
-        push hl
-        ld de,SHNT
-        add hl,de
-        ld a,(hl)
-        pop hl
-        cp 20h
-        jr z,DA4
-        cp {BLANK}
-        jr nz,DA5
-DA4:    ld de,5800h
-        add hl,de
-        ld a,(SPA)
+        ld (CCI),hl
+        call CELLINFO
+        ld a,c
+        ld (CCN),a
+        ld a,b
+        ld (CCA),a
+        ld a,(CCY)              ; IX = SROW + (cell row - sprite top + 7) * 3 + column
+        add a,a
+        add a,a
+        add a,a
+        ld hl,SPY
+        sub (hl)
+        add a,7
+        ld l,a
+        add a,a
+        add a,l
+        ld l,a
+        ld a,(RX0)
+        ld h,a
+        ld a,(CCX)
+        sub h
+        add a,l
+        push de
+        ld e,a
+        ld d,0
+        ld ix,(SROW)
+        add ix,de
+        pop de
+        ld hl,(CCI)
+        ld a,h
+        add a,a
+        add a,a
+        add a,a
+        or 40h
+        ld h,a
+        ld a,(de)
+        or (ix+0)
         ld (hl),a
-DA5:    inc b
+        inc de
+        inc h
+        ld a,(de)
+        or (ix+3)
+        ld (hl),a
+        inc de
+        inc h
+        ld a,(de)
+        or (ix+6)
+        ld (hl),a
+        inc de
+        inc h
+        ld a,(de)
+        or (ix+9)
+        ld (hl),a
+        inc de
+        inc h
+        ld a,(de)
+        or (ix+12)
+        ld (hl),a
+        inc de
+        inc h
+        ld a,(de)
+        or (ix+15)
+        ld (hl),a
+        inc de
+        inc h
+        ld a,(de)
+        or (ix+18)
+        ld (hl),a
+        inc de
+        inc h
+        ld a,(de)
+        or (ix+21)
+        ld (hl),a
+        call OTHERS
+        ld a,(CCN)
+        cp 20h
+        jr z,CA4
+        cp {BLANK}
+        jr z,CA4
+        ld a,(CCA)              ; drawn cell: sprite ink over the cell's paper, if it has pixels
+        ld b,a
+        ld a,(CCX)
+        ld hl,TCX0
+        cp (hl)
+        jr c,CA3
+        ld hl,TCX1
+        ld a,(hl)
+        ld hl,CCX
+        cp (hl)
+        jr c,CA3
+        ld a,(CCY)
+        ld hl,TCY0
+        cp (hl)
+        jr c,CA3
+        ld hl,TCY1
+        ld a,(hl)
+        ld hl,CCY
+        cp (hl)
+        jr c,CA3
+        ld a,b
+        and 38h
+        ld b,a
+        ld a,(SPA)
+        and 47h
+        or b
+        jr CA5
+CA3:    ld a,b
+        jr CA5
+CA4:    ld a,(SPA)
+CA5:    ld hl,(CCI)
+        ld de,5800h
+        add hl,de
+        ld (hl),a
+        pop bc
+CC8:    inc b
         ld a,(RX1)
         cp b
-        jr nc,DA3
+        jp nc,CC3
         inc c
         ld a,(RY1)
         cp c
-        jr nc,DA2
+        jp nc,CC2
         ret
 SPX:    db 0
 SPY:    db 0
 SPROW:  db 0
+DSN:    db 0
+TCM:    db 0
+TFIRST: db 0
+TLAST:  db 0
 SPA:    db 0
 SPP:    dw 0
 RX0:    db 0
@@ -704,32 +1327,7 @@ RX1:    db 0
 RY0:    db 0
 RY1:    db 0
 
-; INRECT: is cell (B = x, C = y) inside one of E rectangles (x0, y0, x1, y1) at IY?  Z = yes
-INRECT: ld a,e
-        or a
-        jr z,INR0
-INR1:   ld a,b
-        cp (iy+0)
-        jr c,INR2
-        ld a,(iy+2)
-        cp b
-        jr c,INR2
-        ld a,c
-        cp (iy+1)
-        jr c,INR2
-        ld a,(iy+3)
-        cp c
-        jr c,INR2
-        xor a
-        ret
-INR2:   inc iy
-        inc iy
-        inc iy
-        inc iy
-        dec e
-        jr nz,INR1
-INR0:   or 1
-        ret
+
 
 ; ------------------------------------------------------------------ input
 ; GTSTCK: A = 0 keys / 1 Kempston  ->  A = MSX direction 0..8
@@ -801,22 +1399,6 @@ GS9:    ld a,b
 DIRTAB: db 0,1,5,0,7,8,6,7,3,2,4,3,0,1,5,0
 PRESENTQ:
         ret
-; PRESENTX: input reads refresh the screen only outside the game loop (menus, waits); in the game
-; loop HALMON already refreshes it once per frame, at the right moment
-PRESENTX:
-        push af
-        push hl
-        ld a,(JIF)
-        ld hl,LASTH
-        sub (hl)
-        pop hl
-        cp 3
-        jr c,PX1
-        pop af
-        jp PRESENT
-PX1:    pop af
-        ret
-
 GTTRIG: call PRESENTX
         ld a,7Fh
         in a,(0FEh)
@@ -947,6 +1529,191 @@ BEEP:   push af
         pop bc
         pop af
         ret
+; MONSTERS + screen refresh (patched into the main-loop delay)
+; once per main loop: monsters, then wait for the loop's share of time (same speed in every room,
+; ~115 loops/s like the MSX), and refresh the screen once per frame right after the interrupt,
+; while the beam is still in the top border (the sprites no longer flicker)
+HALMON: call {MONSTERS}
+        ld a,(JIF)
+        ld (LASTH),a
+HM1:    di
+        ld a,(CREDIT)
+        sub {LOOPCOST}
+        jr nc,HM2
+        ei
+        halt
+        jr HM1
+HM2:    ld (CREDIT),a
+        ei
+        ret
+
+ZXC:
+{ZXC}
+; PRESENTX: input reads refresh the screen only outside the game loop (menus, waits); in the game
+; loop HALMON already refreshes it once per frame, at the right moment
+PRESENTX:
+        push af
+        push hl
+        ld a,(JIF)
+        ld hl,LASTH
+        sub (hl)
+        pop hl
+        cp 3
+        jr c,PX1
+        pop af
+        jp PRESENT
+PX1:    pop af
+        ret
+
+HALEND:
+; ---- above the IM2 table (FE00-FF00, built by INIT)
+        org 0FF01h
+; SLOTP: B = slot -> HL = SST slot, DE = REC slot, IY = NRX slot
+SLOTP:  ld a,b
+        add a,a
+        add a,a
+        ld e,a
+        ld d,0
+        ld iy,NRX
+        add iy,de
+        ld hl,REC
+        add hl,de
+        push hl
+        ld hl,SST
+        add hl,de
+        pop de
+        ret
+; OVL: rectangles at IX and IY overlap?  Z = yes
+OVL:    ld a,(ix+2)
+        cp (iy+0)
+        jr c,OVN
+        ld a,(iy+2)
+        cp (ix+0)
+        jr c,OVN
+        ld a,(ix+3)
+        cp (iy+1)
+        jr c,OVN
+        ld a,(iy+3)
+        cp (ix+1)
+        jr c,OVN
+        xor a
+        ret
+OVN:    or 1
+        ret
+; RECCLR: no sprite on screen
+RECCLR: push hl
+        push bc
+        ld hl,REC
+        ld b,4
+RC1:    ld (hl),0FFh
+        inc hl
+        ld (hl),0FFh
+        inc hl
+        ld (hl),0
+        inc hl
+        ld (hl),0
+        inc hl
+        djnz RC1
+        pop bc
+        pop hl
+        ret
+; ERASER: IX = rectangle (cells) -> background restored
+ERASER: ld c,(ix+1)
+ER2:    ld b,(ix+0)
+ER3:    ld a,c
+        cp 24
+        jr nc,ER4
+        ld a,b
+        cp 32
+        jr nc,ER4
+        ld e,4                  ; a cell under a sprite is composed later, never blanked
+        ld iy,NRX
+        call INRECT
+        jr z,ER4
+        ld l,c
+        ld h,0
+        add hl,hl
+        add hl,hl
+        add hl,hl
+        add hl,hl
+        add hl,hl
+        ld e,b
+        ld d,0
+        add hl,de
+        push bc
+        call RENDER
+        pop bc
+ER4:    inc b
+        ld a,(ix+2)
+        cp b
+        jr nc,ER3
+        inc c
+        ld a,(ix+3)
+        cp c
+        jr nc,ER2
+        ret
+; RECTOF: SAT entry IX -> cell rectangle RX0, RY0, RX1, RY1
+RECTOF: ld a,(ix+1)
+        rrca
+        rrca
+        rrca
+        and 1Fh
+        ld (RX0),a
+        ld a,(ix+1)
+        add a,15
+        jr nc,RT0
+        ld a,0FFh
+RT0:    rrca
+        rrca
+        rrca
+        and 1Fh
+        ld (RX1),a
+        ld a,(ix+0)
+        inc a
+        ld c,a
+        rrca
+        rrca
+        rrca
+        and 1Fh
+        ld (RY0),a
+        ld a,c
+        add a,15
+        rrca
+        rrca
+        rrca
+        and 1Fh
+        ld (RY1),a
+        ret
+
+; INRECT: is cell (B = x, C = y) inside one of E rectangles (x0, y0, x1, y1) at IY?  Z = yes
+INRECT: ld a,e
+        or a
+        jr z,INR0
+INR1:   ld a,b
+        cp (iy+0)
+        jr c,INR2
+        ld a,(iy+2)
+        cp b
+        jr c,INR2
+        ld a,c
+        cp (iy+1)
+        jr c,INR2
+        ld a,(iy+3)
+        cp c
+        jr c,INR2
+        xor a
+        ret
+INR2:   inc iy
+        inc iy
+        inc iy
+        inc iy
+        dec e
+        jr nz,INR1
+INR0:   or 1
+        ret
+HIEND:
+; ---- sound code below the stack (loaded with the game image)
+        org 7600h
 ; ---- beeper tone: D = half period in samples (0: use E; both 0: silence), HL = duration
 ; (L + 256*(H-1) samples of 137 T, ~25.5 kHz)
 TONE2:  di
@@ -1088,7 +1855,11 @@ MUSIC:  call PRESENT
 MU1:    ld a,{NSEG}
         ld (MUS),a
 MU2:    ld a,(MUS)
-        and 1
+        cp 1
+        jr nz,MU2a
+        ld de,0                 ; last slice of each note: silence, so repeated notes are heard apart
+        jr MU4
+MU2a:   and 1
         ld a,(ix+0)
         jr nz,MU3               ; odd segments: melody (low nibble)
         rrca                    ; even segments: arpeggio (high nibble)
@@ -1147,32 +1918,7 @@ STEPS:
 NOTES:
 {NOTES}
 
-; MONSTERS + screen refresh (patched into the main-loop delay)
-; once per main loop: monsters, then wait for the loop's share of time (same speed in every room,
-; ~115 loops/s like the MSX), and refresh the screen once per frame right after the interrupt,
-; while the beam is still in the top border (the sprites no longer flicker)
-HALMON: call {MONSTERS}
-        ld a,(JIF)
-        ld (LASTH),a
-HM1:    di
-        ld a,(CREDIT)
-        sub {LOOPCOST}
-        jr nc,HM2
-        ei
-        halt
-        jr HM1
-HM2:    ld (CREDIT),a
-        ei
-        ld a,(JIF)
-        ld hl,LASTP
-        cp (hl)
-        ret z
-        ld (hl),a
-        jp PRESENT
-
-ATTRTAB:
-{ATTR}
-HALEND:
+LOEND:
 '''
 
 def db_lines(data, per=16):
@@ -1194,7 +1940,7 @@ def build(src_bin='anubis_new.bin', mons_sym='mons.sym'):
     nd = [steps.index(a) << 4 | steps.index(b) for a, b in notes]
     sd = [v for st in steps for v in (st & 255, st >> 8)]
     src = ASM.format(FRAMECREDIT=FRAMECREDIT, LOOPCOST=LOOPCOST, CREDMAX=CREDMAX, JIFLEN='0%Xh' % enc_len(int(RATE * 0.02)), BLIPLEN='0%Xh' % enc_len(int(RATE * 0.005)), NSEG=NSEG, SEGLEN='0%Xh' % enc_len(int(MRATE * 0.223 / NSEG)), SH='0%X' % SH, HAL='0%X' % HAL, BLANK=art.BLANK, NNOTES=len(notes), NOTES=db_lines(nd), STEPS=db_lines(sd),
-                     MONSTERS='0%Xh' % sym['MONSTERS'], ATTR=db_lines(attr_table()))
+                     MONSTERS='0%Xh' % sym['MONSTERS'], ZXC=db_lines([(MSX2ZX[c][1] << 3) | MSX2ZX[c][0] for c in range(16)]))
     open('hal.asm', 'w').write(src)
     r = subprocess.run(['pasmo', '--bin', 'hal.asm', 'hal.bin', 'hal.sym'], capture_output=True, text=True)
     if r.returncode:
@@ -1204,8 +1950,8 @@ def build(src_bin='anubis_new.bin', mons_sym='mons.sym'):
         p = line.split()
         if len(p) >= 3 and p[1] == 'EQU': hs[p[0]] = int(p[2].rstrip('H'), 16)
     hal = open('hal.bin', 'rb').read()
-    print('HAL %04X-%04X (%d bytes)' % (HAL, HAL + len(hal) - 1, len(hal)))
-    assert HAL + len(hal) <= 0xFDFD
+    print('HAL %04X-%04X + FF01-%04X' % (HAL, hs['HALEND'] - 1, hs['HIEND'] - 1))
+    assert hs['HALEND'] <= 0xFDFD and hs['HIEND'] <= 0x10000
     # ---- patch the game
     n = 0
     for i in range(len(d) - 2):
@@ -1249,7 +1995,11 @@ def build(src_bin='anubis_new.bin', mons_sym='mons.sym'):
     d[dl - B + 1] = DELAY_LO; d[dl - B + 2] = DELAY_HI
     print('keyboard reads patched:', c1, ' timer reads patched:', c2)
     # ---- one memory image 8500..HALEND
-    img = bytearray(d) + bytes(HAL - (B + len(d))) + hal
+    assert hal[hs['INIT'] - IMGBASE] == 0xF3, 'hal.bin must start at IMGBASE'
+    assert hs['LOEND'] <= 0x7800
+    img = bytearray(hal)
+    assert not any(img[B - IMGBASE:B - IMGBASE + len(d)]), 'HAL overlaps the game'
+    img[B - IMGBASE:B - IMGBASE + len(d)] = d
     return img, hs
 
 # ------------------------------------------------------------------ TAP
@@ -1271,7 +2021,7 @@ def make_tap(img, entry, out, name='ANUBIS'):
             bytes([RAND, USR]) + num(entry))
     prog = basic_line(10, toks)
     hdr = bytes([0]) + name.ljust(10).encode() + struct.pack('<HHH', len(prog), 10, len(prog))
-    chdr = bytes([3]) + name.ljust(10).encode() + struct.pack('<HHH', len(img), B, 32768)
+    chdr = bytes([3]) + name.ljust(10).encode() + struct.pack('<HHH', len(img), IMGBASE, 32768)
     data = tap_block(0, hdr) + tap_block(0xFF, prog) + tap_block(0, chdr) + tap_block(0xFF, img)
     open(out, 'wb').write(data)
 
@@ -1306,4 +2056,4 @@ if __name__ == '__main__':
     img, hs = build()
     open('anubis_zx.bin', 'wb').write(img)
     make_tap(img, hs['INIT'], 'ANUBIS_ZX.tap')
-    print('image %04X-%04X, entry %d' % (B, B + len(img) - 1, hs['INIT']))
+    print('image %04X-%04X, entry %d' % (IMGBASE, IMGBASE + len(img) - 1, hs['INIT']))

@@ -6,7 +6,7 @@ for line in open('mons.sym'):
     p=line.split()
     if len(p)>=3 and p[1]=='EQU': sym[p[0]]=int(p[2].rstrip('H'),16)
 room=sys.argv[1]; tag=sys.argv[2]
-zx = zxsim.ZX(img, 0x8500, hs['INIT'])
+zx = zxsim.ZX(img, spectrum.IMGBASE, hs['INIT'])
 zx.run_frames(850)
 zx.screenshot('./zx_menu.png')
 def key(k,n=6):

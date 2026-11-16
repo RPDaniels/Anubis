@@ -2,7 +2,7 @@
 import struct, spectrum
 img, hs = spectrum.build()
 ram = bytearray(0xC000)                       # 0x4000-0xFFFF
-ram[0x8500 - 0x4000:0x8500 - 0x4000 + len(img)] = img
+ram[spectrum.IMGBASE - 0x4000:spectrum.IMGBASE - 0x4000 + len(img)] = img
 hdr = bytearray(30)
 pc, sp = hs['INIT'], 0x8000
 struct.pack_into('<BBHHHHBB', hdr, 0, 0, 0, 0, 0, pc, sp, 0x3F, 0)
