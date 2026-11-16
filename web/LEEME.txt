@@ -14,6 +14,11 @@ Probar en tu ordenador
   python3 -m http.server 8000      (dentro de esta carpeta)
   y abre http://localhost:8000
 
+Publicarlo
+  itch.io: crea un proyecto "HTML", sube este zip y marca
+           "This file will be played in the browser". Tamaño recomendado 1000 x 760.
+  GitHub Pages / Netlify / tu web: sube la carpeta tal cual.
+
 Emuladores incluidos
   WebMSX 6.0.8 (versión C-BIOS) de Paulo Augusto Peccin - https://webmsx.org
   JSSpeccy 3.2 de Matt Westcott - GPL v3 (spectrum/jsspeccy/COPYING.txt)

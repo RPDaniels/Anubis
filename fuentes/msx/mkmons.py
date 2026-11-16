@@ -18,6 +18,9 @@ CODE10, CODE10_END = 0xD7E0, 0xD8A0 # empty room slots 34-45 (death sequence)
 DATA2, DATA2_END = 0xD610, 0xD6C0   # empty room slots 5-15 (game-over text)
 
 ASM = r'''
+DROPTOP  equ 33h                ; drop appears under the ceiling
+DROPLAND equ 57h                ; drop touches the floor
+DROPEND  equ 77h                ; end of the splash
 JIFFY   equ 0FC9Eh
 ROOM    equ 0F304h
 BLANK   equ {BLANK}
@@ -330,6 +333,8 @@ MD1:    push hl
         ld e,a
         pop hl
         ld a,(ix+0)
+        cp 6
+        jp z,DROPD
         cp 4
         jr nc,MD2
         bit 7,(ix+5)
@@ -677,6 +682,24 @@ DT3:    srl d
         call SCORE
         jp EW
 DCOL:   db 15,11,10,9,8,13,7,3
+; ---- falling drop: falls to the floor, then splashes (two frames) before the next drop
+DROPD:  ld a,(ix+1)
+        ld e,88
+        cp DROPLAND
+        jr c,DD1
+        ld e,92
+        cp DROPLAND+(DROPEND-DROPLAND)/2
+        jr c,DD0
+        ld e,96
+DD0:    ld a,DROPLAND
+DD1:    ld (hl),a
+        inc hl
+        ld a,(ix+2)
+        ld (hl),a
+        inc hl
+        ld (hl),e
+        inc hl
+        jp MDC
 CODE10END:
         org {CODE5}h
 ; ---- menu dispatcher: 3 harmless monsters, 4 no monsters, 5 choose the starting screen
@@ -974,7 +997,7 @@ NEWROOM:
         call 005Ch
         ld hl,PATS2
         ld de,3A80h
-        ld bc,128
+        ld bc,160
         call 005Ch
         pop bc
         ld a,(INV)
@@ -1048,11 +1071,11 @@ NRB4:   cp 6
 NRB6:   sub 6                   ; 6,7: drop falling from the ceiling
         call SPCOL
         ld (ix+0),6
-        ld (ix+3),38h
-        ld (ix+4),56h
+        ld (ix+3),DROPTOP
+        ld (ix+4),DROPEND
         ld a,(RPAR)
         and 1Fh
-        add a,38h
+        add a,DROPTOP
         ld (ix+1),a
         ld (ix+5),2
         ld (ix+6),0
@@ -1109,6 +1132,50 @@ SW1:    ld a,(ix+3)
         ld (ix+1),a
         ld (ix+5),1
         ret
+; ---- title tune (replaces the original routine at 8C00): same notes and tempo, but any menu
+; key (0-5) stops it at once so an option can be chosen without waiting for the end
+MUSMSX: ld a,7
+        ld e,0B8h
+        call PSGW
+        ld a,8
+        ld e,0Eh
+        call PSGW
+        ld a,9
+        ld e,0Fh
+        call PSGW
+        ld hl,8C6Eh
+        ld b,45h
+MM1:    push bc
+        ld c,0                  ; registers 0..3 from the table
+MM2:    ld a,c
+        ld e,(hl)
+        call PSGW
+        inc hl
+        inc c
+        ld a,c
+        cp 4
+        jr nz,MM2
+        push hl
+        ld b,8
+MM3:    ld hl,0F00h
+MM4:    dec hl
+        ld a,h
+        or l
+        jr nz,MM4
+        ld a,0F0h               ; keyboard row 0 (digits 0..7)
+        out (0AAh),a
+        in a,(0A9h)
+        and 3Fh
+        cp 3Fh
+        jr nz,MM9
+        djnz MM3
+        pop hl
+        pop bc
+        djnz MM1
+        jp SNDOFF
+MM9:    pop hl
+        pop bc
+        jp SNDOFF
 AXTAB:  db 0,0,0,0,1,0,1
 PBTAB:  db 0,24,40,56,72,80,88
 CODE7END:
@@ -1358,6 +1425,8 @@ def post_patch(d):
     st = sym['STROOM']
     d[0xA0F4 - B:0xA0FA - B] = bytes([0x3A, st & 255, st >> 8, 0x32, 0x04, 0xF3])
     jp(0xA224, sym['DELAY1'])
+    assert d[0x8C00 - B:0x8C03 - B] == bytes([0x3E, 0x08, 0xD3])
+    jp(0x8C00, sym['MUSMSX'])        # title tune that a menu key can interrupt
     # status line: "VIDAS:10" and two ankhs
     d[0xCD56 - B] = ord('1'); d[0xCD57 - B] = ord('0'); d[0xCD58 - B] = art.BLANK
     # score "0000" in cols 11-14

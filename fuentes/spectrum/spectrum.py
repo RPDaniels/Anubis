@@ -5,7 +5,8 @@
 import struct, subprocess, sys
 B = 0x8500
 HAL = 0xF400
-DELAY_LO, DELAY_HI = 0x40, 0x00
+DELAY_LO, DELAY_HI = 0x01, 0x00   # the loop is paced by HALMON (interrupt credits) instead
+FRAMECREDIT, LOOPCOST, CREDMAX = 23, 10, 40
 SH = 0x6000                # shadow VRAM: pat 0000 / name 0800 / sat 0B00 / col 0B80 / spr 0BA0
 
 # MSX colour -> (spectrum colour, bright)
@@ -21,8 +22,7 @@ def attr_table():
         t.append((bright << 6) | (paper << 3) | ink)
     return t
 
-T2NOPS = 5
-RATE = 223722 * 29 / 256        # TONE2 samples per second (loop padded to match; contended port FE included)
+RATE = 3500000 / 137            # TONE2 samples per second (137 T loop)
 def half(p):
     """AY period -> TONE2 half period (AY clock 1.7897725 MHz)"""
     if not p: return 0
@@ -30,12 +30,19 @@ def half(p):
 def enc_len(n):
     if n & 255 == 0: n += 1
     return ((n >> 8) + 1) << 8 | (n & 255)
+MRATE = 3500000 / 62.5         # MUSIC loop: 61 T per sample (+ average ULA port contention)
+NSEG = 11                       # segments per note (0.223 s / 11 = 20 ms)
+def step(p):
+    """AY period -> 16-bit phase step for the MUSIC loop (AY clock 1.7897725 MHz)"""
+    return round(1789772.5 / (16 * p) * 65536 / MRATE) if p else 0
 def music_table(d):
-    """title tune: per note the channel A (arpeggio) and channel B (melody) half periods"""
+    """title tune: per note the phase steps of channel A (arpeggio) and channel B (melody);
+    a silent channel takes the other one's note"""
     x = d[0x8c6e - B:0x8c6e - B + 0x45 * 4]
     out = []
     for i in range(0, len(x), 4):
-        out.append((half(x[i] | x[i + 1] << 8), half(x[i + 2] | x[i + 3] << 8)))
+        a, b = step(x[i] | x[i + 1] << 8), step(x[i + 2] | x[i + 3] << 8)
+        out.append((a or b, b or a))
     return out
 
 ASM = r'''
@@ -84,11 +91,20 @@ ISR:    push af
         ld hl,(JIF)
         inc hl
         ld (JIF),hl
+        ld a,(CREDIT)           ; game-loop pacing: each frame earns time for {FRAMECREDIT}/{LOOPCOST} loops
+        add a,{FRAMECREDIT}
+        cp {CREDMAX}
+        jr c,ISR1
+        ld a,{CREDMAX}
+ISR1:   ld (CREDIT),a
         pop hl
         pop af
         ei
         reti
 JIF:    dw 0
+CREDIT: db 0
+LASTP:  db 0
+LASTH:  db 0F0h
 FULL:   db 1
 NREC:   db 0
 REC:    ds 4*8
@@ -171,7 +187,7 @@ WRTVRM: push hl
         jr nz,WV9
         ld de,-SHNT
         add hl,de
-        call RENDER
+        call RENDERQ
         jr WV9
 WV2:    cp 3
         jr z,WV9
@@ -221,11 +237,21 @@ VPOST:  cp 2                    ; A = region, HL = vram start, BC = count
 VP2:    ld a,(FULL)
         or a
         ret nz
+        ld a,b                  ; a big block (room drawing): one full redraw later is much faster
+        or a
+        jr nz,VPF
+        ld a,c
+        cp 64
+        jr c,VP2a
+VPF:    ld a,1
+        ld (FULL),a
+        ret
+VP2a:
         ld de,-1800h
         add hl,de
 VP3:    push hl
         push bc
-        call RENDER
+        call RENDERQ
         pop bc
         pop hl
         inc hl
@@ -312,7 +338,9 @@ I32b:   ld (hl),a
 
 ; ------------------------------------------------------------------ rendering
 ; RENDER: HL = cell index 0..767
-RENDER: push hl
+; CELLINFO: HL = cell index -> C = name, B = attribute, DE = pattern address (HL kept)
+CELLINFO:
+        push hl
         ld de,SHNT
         add hl,de
         ld a,(hl)
@@ -329,18 +357,7 @@ RENDER: push hl
         ld hl,ATTRTAB
         add hl,de
         ld b,(hl)
-        ld a,e                  ; giant lotus petals (light blue on MSX): bright cyan
-        and 0F0h
-        cp 50h
-        jr nz,NOLOT
-        ld a,c
-        cp 0EFh
-        jr z,LOT
-        sub 21h
-        cp 7
-        jr nc,NOLOT
-LOT:    ld b,45h
-NOLOT:  ld l,c
+        ld l,c
         ld h,0
         add hl,hl
         add hl,hl
@@ -349,6 +366,28 @@ NOLOT:  ld l,c
         add hl,de
         ex de,hl
         pop hl
+        ret
+; RENDERQ: render a cell now unless a sprite covers it (then the next PRESENT recomposes it)
+RENDERQ:
+        push bc
+        ld a,l
+        and 1Fh
+        ld b,a
+        push hl
+        add hl,hl
+        add hl,hl
+        add hl,hl
+        ld c,h
+        pop hl
+        push hl
+        ld a,(NREC)
+        ld e,a
+        ld iy,REC
+        call INRECT
+        pop hl
+        pop bc
+        ret z
+RENDER: call CELLINFO
         push hl
         ld a,h
         add a,58h
@@ -375,6 +414,7 @@ PRESENT:
         push de
         push hl
         push ix
+        push iy
         ld a,(FULL)
         or a
         jr z,PR1
@@ -447,7 +487,8 @@ PR4:    ld a,(ix+0)
 PR5:    ld de,4
         add ix,de
         djnz PR4
-PR9:    pop ix
+PR9:    pop iy
+        pop ix
         pop hl
         pop de
         pop bc
@@ -663,6 +704,33 @@ RX1:    db 0
 RY0:    db 0
 RY1:    db 0
 
+; INRECT: is cell (B = x, C = y) inside one of E rectangles (x0, y0, x1, y1) at IY?  Z = yes
+INRECT: ld a,e
+        or a
+        jr z,INR0
+INR1:   ld a,b
+        cp (iy+0)
+        jr c,INR2
+        ld a,(iy+2)
+        cp b
+        jr c,INR2
+        ld a,c
+        cp (iy+1)
+        jr c,INR2
+        ld a,(iy+3)
+        cp c
+        jr c,INR2
+        xor a
+        ret
+INR2:   inc iy
+        inc iy
+        inc iy
+        inc iy
+        dec e
+        jr nz,INR1
+INR0:   or 1
+        ret
+
 ; ------------------------------------------------------------------ input
 ; GTSTCK: A = 0 keys / 1 Kempston  ->  A = MSX direction 0..8
 GTSTCK: push bc
@@ -733,8 +801,23 @@ GS9:    ld a,b
 DIRTAB: db 0,1,5,0,7,8,6,7,3,2,4,3,0,1,5,0
 PRESENTQ:
         ret
+; PRESENTX: input reads refresh the screen only outside the game loop (menus, waits); in the game
+; loop HALMON already refreshes it once per frame, at the right moment
+PRESENTX:
+        push af
+        push hl
+        ld a,(JIF)
+        ld hl,LASTH
+        sub (hl)
+        pop hl
+        cp 3
+        jr c,PX1
+        pop af
+        jp PRESENT
+PX1:    pop af
+        ret
 
-GTTRIG: call PRESENT
+GTTRIG: call PRESENTX
         ld a,7Fh
         in a,(0FEh)
         bit 0,a
@@ -744,7 +827,7 @@ GTTRIG: call PRESENT
         ret
 
 ; KROW0: MSX keyboard row 0 (digits 0..7, bit = 0 when pressed)
-KROW0:  call PRESENT
+KROW0:  call PRESENTX
         push bc
         ld a,0F7h
         in a,(0FEh)             ; 1..5 in bits 0..4
@@ -864,43 +947,34 @@ BEEP:   push af
         pop bc
         pop af
         ret
-; ---- two-voice beeper engine: each sample outputs voice A then voice B (pulse interleaving)
-; D = half period A (0 = silent), E = half period B (0 = silent), HL = duration (L + 256*(H-1) samples)
+; ---- beeper tone: D = half period in samples (0: use E; both 0: silence), HL = duration
+; (L + 256*(H-1) samples of 137 T, ~25.5 kHz)
 TONE2:  di
-        ld a,10h
+        ld a,d
+        or a
+        jr nz,T21
+        ld d,e
+T21:    ld a,10h
         inc d
         dec d
-        jr nz,T2X
-        xor a                   ; silent voice: mask 0, slowest counter (keeps the loop timing even)
+        jr nz,T22
+        xor a                   ; silence
         dec d
-T2X:    ld (SMA+1),a
-        ld a,10h
-        inc e
-        dec e
-        jr nz,T2Y
-        xor a
-        dec e
-T2Y:    ld (SMB+1),a
+T22:    ld (SMA+1),a
         ld b,d
-        ld c,e
         xor a
-        ex af,af'
-        xor a
-T2L:    dec b                   ; voice A
+T2L:    dec b
         jr nz,T2A
         ld b,d
 SMA:    xor 10h
 T2A:    out (0FEh),a
-        ex af,af'
-        dec c                   ; voice B
-        jr nz,T2C
-        ld c,e
-SMB:    xor 10h
-T2C:    ex (sp),hl
         ex (sp),hl
-        out (0FEh),a
-        ex af,af'
-{T2PAD}
+        ex (sp),hl
+        ex (sp),hl
+        ex (sp),hl
+        jp T2B
+T2B:    nop
+        nop
         dec l
         jr nz,T2L
         dec h
@@ -975,7 +1049,16 @@ SFX:    push ix                 ; HL = duration
         ld d,a
         pop hl
         pop ix
-        jp TONE2
+        ld a,e                  ; both channels sounding: alternate them call by call (20 ms slices)
+        or a
+        jr z,SFX3
+        ld a,(SFXALT)
+        xor 1
+        ld (SFXALT),a
+        jr z,SFX3
+        ld d,0                  ; this slice: channel B
+SFX3:   jp TONE2
+SFXALT: db 0
 HWAITJ: push hl                 ; B jiffies of sound
         push de
 HWJ1:   push bc
@@ -993,27 +1076,98 @@ HWAITP: push bc                 ; refresh the screen, then wait
 HPSGDLY: call PRESENT           ; countdown blip (screen + ~5 ms of tone)
         ld hl,{BLIPLEN}
         jp SFX
-; ---- title tune: channel A arpeggio + channel B melody, both voices
+; ---- title tune: one clean square wave (phase accumulator, so the pitch is exact) that alternates
+; every ~20 ms between the melody (channel B) and the arpeggio (channel A), like the classic
+; two-voice beeper tunes; the shared phase keeps the switches click-free
 MUSIC:  call PRESENT
-        ld hl,NOTES
-        ld b,{NNOTES}
-MU1:    push bc
-        ld d,(hl)
-        inc hl
+        di
+        ld ix,NOTES
+        ld hl,0
+        ld a,{NNOTES}
+        ld (MUN),a
+MU1:    ld a,{NSEG}
+        ld (MUS),a
+MU2:    ld a,(MUS)
+        and 1
+        ld a,(ix+0)
+        jr nz,MU3               ; odd segments: melody (low nibble)
+        rrca                    ; even segments: arpeggio (high nibble)
+        rrca
+        rrca
+        rrca
+MU3:    and 0Fh
+        add a,a
+        ld e,a
+        ld d,0
+        push hl
+        ld hl,STEPS
+        add hl,de
         ld e,(hl)
         inc hl
-        push hl
-        ld hl,{NOTELEN}
-        call TONE2
+        ld d,(hl)
         pop hl
-        pop bc
-        djnz MU1
+MU4:    ld bc,{SEGLEN}
+MUL:    add hl,de
+        ld a,h
+        rrca
+        rrca
+        rrca
+        and 10h
+        out (0FEh),a
+        dec c
+        jr nz,MUL
+        dec b
+        jr nz,MUL
+        ld a,0F7h               ; a menu key (1-5 or 0) stops the tune at once
+        in a,(0FEh)
+        and 1Fh
+        cp 1Fh
+        jr nz,MUQ
+        ld a,0EFh
+        in a,(0FEh)
+        rra
+        jr nc,MUQ
+        ld a,(MUS)
+        dec a
+        ld (MUS),a
+        jr nz,MU2
+        inc ix
+        ld a,(MUN)
+        dec a
+        ld (MUN),a
+        jr nz,MU1
+MUQ:    xor a
+        out (0FEh),a
+        ei
         ret
+MUN:    db 0
+MUS:    db 0
+STEPS:
+{STEPS}
 NOTES:
 {NOTES}
 
 ; MONSTERS + screen refresh (patched into the main-loop delay)
+; once per main loop: monsters, then wait for the loop's share of time (same speed in every room,
+; ~115 loops/s like the MSX), and refresh the screen once per frame right after the interrupt,
+; while the beam is still in the top border (the sprites no longer flicker)
 HALMON: call {MONSTERS}
+        ld a,(JIF)
+        ld (LASTH),a
+HM1:    di
+        ld a,(CREDIT)
+        sub {LOOPCOST}
+        jr nc,HM2
+        ei
+        halt
+        jr HM1
+HM2:    ld (CREDIT),a
+        ei
+        ld a,(JIF)
+        ld hl,LASTP
+        cp (hl)
+        ret z
+        ld (hl),a
         jp PRESENT
 
 ATTRTAB:
@@ -1035,8 +1189,11 @@ def build(src_bin='anubis_new.bin', mons_sym='mons.sym'):
         p = line.split()
         if len(p) >= 3 and p[1] == 'EQU': sym[p[0]] = int(p[2].rstrip('H'), 16)
     notes = music_table(d)
-    nd = [v for pair in notes for v in pair]
-    src = ASM.format(T2PAD='\n'.join(['        nop'] * T2NOPS), JIFLEN='0%Xh' % enc_len(int(RATE * 0.02)), BLIPLEN='0%Xh' % enc_len(int(RATE * 0.005)), NOTELEN='0%Xh' % enc_len(int(RATE * 0.223)), SH='0%X' % SH, HAL='0%X' % HAL, BLANK=art.BLANK, NNOTES=len(notes), NOTES=db_lines(nd),
+    steps = sorted(set(v for pair in notes for v in pair))
+    assert len(steps) <= 16
+    nd = [steps.index(a) << 4 | steps.index(b) for a, b in notes]
+    sd = [v for st in steps for v in (st & 255, st >> 8)]
+    src = ASM.format(FRAMECREDIT=FRAMECREDIT, LOOPCOST=LOOPCOST, CREDMAX=CREDMAX, JIFLEN='0%Xh' % enc_len(int(RATE * 0.02)), BLIPLEN='0%Xh' % enc_len(int(RATE * 0.005)), NSEG=NSEG, SEGLEN='0%Xh' % enc_len(int(MRATE * 0.223 / NSEG)), SH='0%X' % SH, HAL='0%X' % HAL, BLANK=art.BLANK, NNOTES=len(notes), NOTES=db_lines(nd), STEPS=db_lines(sd),
                      MONSTERS='0%Xh' % sym['MONSTERS'], ATTR=db_lines(attr_table()))
     open('hal.asm', 'w').write(src)
     r = subprocess.run(['pasmo', '--bin', 'hal.asm', 'hal.bin', 'hal.sym'], capture_output=True, text=True)
