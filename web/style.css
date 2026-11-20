@@ -43,3 +43,47 @@ footer a { color: #8f8874; }
 body.game main { padding: 0 8px 30px; max-width: none; }
 body.game .emu-wrap { margin: 0; min-height: calc(100vh - 12px); align-items: center; }
 body.game .help { max-width: 960px; margin: 16px auto 0; }
+
+/* Spectrum page: game area, full-screen mode and touch controls */
+#game { display: flex; flex-direction: column; align-items: center; }
+body.game #game .emu-wrap { min-height: 0; margin: 8px 0 6px; }
+.gamebar { display: flex; gap: 8px; justify-content: center; margin: 4px 0 8px; flex-wrap: wrap; }
+.gamebar button, #pad button {
+  font: inherit; color: var(--text); background: #26222f; border: 1px solid #3a3446;
+  border-bottom-width: 3px; border-radius: 8px; cursor: pointer;
+  -webkit-user-select: none; user-select: none; -webkit-tap-highlight-color: transparent; touch-action: none;
+}
+.gamebar button { padding: 8px 14px; font-size: .95rem; }
+.gamebar button.on { border-color: var(--gold); color: var(--gold); }
+#pad { width: 100%; max-width: 720px; padding: 0 8px 8px; touch-action: none; }
+#pad[hidden] { display: none; }
+.pad-keys { display: grid; grid-template-columns: repeat(10, 1fr) 2fr; gap: 5px; margin-bottom: 10px; }
+.pad-keys button { padding: 10px 0; font-size: 1rem; font-weight: bold; }
+.pad-main { display: flex; justify-content: space-between; align-items: center; gap: 16px; }
+.dpad { display: grid; grid-template-columns: repeat(3, 64px); grid-template-rows: repeat(3, 64px); gap: 6px; }
+.dpad button { font-size: 1.6rem; }
+.dpad .up { grid-column: 2; grid-row: 1; }
+.dpad .left { grid-column: 1; grid-row: 2; }
+.dpad .right { grid-column: 3; grid-row: 2; }
+.dpad .down { grid-column: 2; grid-row: 3; }
+.space { flex: 0 1 220px; height: 96px; font-size: 1.15rem; font-weight: bold; color: var(--gold) !important; }
+#pad button.on { background: var(--gold); color: #000 !important; border-color: var(--gold); }
+#game.fs { position: fixed; inset: 0; z-index: 1000; background: #000; justify-content: center;
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left); }
+#game.fs .gamebar { position: absolute; top: 6px; right: 8px; margin: 0; z-index: 2; }
+#game.fs .gamebar #btn-pad { display: none; }
+#game.fs .gamebar button { padding: 5px 10px; opacity: .8; }
+body.noscroll { overflow: hidden; }
+@media (max-width: 420px) {
+  .dpad { grid-template-columns: repeat(3, 54px); grid-template-rows: repeat(3, 54px); }
+  .space { height: 80px; }
+  .pad-keys button { padding: 8px 0; font-size: .9rem; }
+}
+/* landscape full screen: the controls float at the sides of the picture */
+#game.fs.overlay #pad { position: absolute; inset: 0; max-width: none; padding: 0; pointer-events: none; }
+#game.fs.overlay #pad button { pointer-events: auto; opacity: .6; }
+#game.fs.overlay .pad-keys { position: absolute; top: 52px; right: 12px; width: 168px; grid-template-columns: repeat(3, 1fr); gap: 5px; margin: 0; }
+#game.fs.overlay .pad-keys .wide { grid-column: span 2; }
+#game.fs.overlay .pad-keys button { padding: 7px 0; }
+#game.fs.overlay .dpad { position: absolute; left: 12px; bottom: 14px; grid-template-columns: repeat(3, 54px); grid-template-rows: repeat(3, 54px); }
+#game.fs.overlay .space { position: absolute; right: 12px; bottom: 14px; width: 168px; height: 64px; }

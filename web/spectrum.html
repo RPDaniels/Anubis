@@ -2,7 +2,8 @@
 <html lang="es">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
 <title>Anubis · ZX Spectrum</title>
 <link rel="stylesheet" href="style.css">
 <script src="spectrum/jsspeccy/jsspeccy.js"></script>
@@ -10,34 +11,127 @@
 <body class="game">
 <div class="frieze"></div>
 <main>
-  <div class="emu-wrap"><div id="jsspeccy"></div></div>
+  <div id="game">
+    <div class="emu-wrap"><div id="jsspeccy"></div></div>
+    <div class="gamebar">
+      <button type="button" id="btn-full">⛶ Pantalla completa</button>
+      <button type="button" id="btn-pad">⌨ Mandos táctiles</button>
+    </div>
+    <div id="pad" hidden>
+      <div class="pad-keys">
+        <button data-k="49">1</button><button data-k="50">2</button><button data-k="51">3</button><button data-k="52">4</button><button data-k="53">5</button><button data-k="54">6</button><button data-k="55">7</button><button data-k="56">8</button><button data-k="57">9</button><button data-k="48">0</button><button data-k="13" class="wide">ENTER</button>
+      </div>
+      <div class="pad-main">
+        <div class="dpad">
+          <button data-k="81" class="up">▲</button>
+          <button data-k="79" class="left">◀</button>
+          <button data-k="80" class="right">▶</button>
+          <button data-k="65" class="down">▼</button>
+        </div>
+        <button data-k="32" class="space">ESPACIO</button>
+      </div>
+    </div>
+  </div>
   <p class="sub"><a class="back" href="index.html">← Anubis</a> · ZX Spectrum 48K · pulsa ▶ para arrancar (el sonido necesita ese clic)</p>
   <div class="help">
-    La melodía del título dura unos segundos; el menú responde cuando termina.
-    <b>Menú:</b> <kbd>1</kbd> teclado, <kbd>0</kbd> empezar. <b>Mover:</b> cursores, <kbd>Q</kbd><kbd>A</kbd><kbd>O</kbd><kbd>P</kbd> o <kbd>5</kbd><kbd>6</kbd><kbd>7</kbd><kbd>8</kbd>.
+    La melodía del título se corta al elegir una opción del menú.
+    <b>Menú:</b> <kbd>1</kbd> teclado, <kbd>0</kbd> empezar. <b>Mover:</b> cursores, <kbd>Q</kbd><kbd>A</kbd><kbd>O</kbd><kbd>P</kbd> o <kbd>5</kbd><kbd>6</kbd><kbd>7</kbd><kbd>8</kbd>; ▲ es el jet pack.
     <kbd>Espacio</kbd> para continuar en las pantallas finales.
-    Secretos: <kbd>3</kbd> monstruos inofensivos, <kbd>4</kbd> sin monstruos, <kbd>5</kbd> elegir pantalla.
+    Secretos: <kbd>3</kbd> monstruos inofensivos, <kbd>4</kbd> sin monstruos, <kbd>5</kbd> elegir pantalla (número y <kbd>ENTER</kbd>).
+    En móvil o tableta usa los mandos táctiles que aparecen bajo la pantalla.
   </div>
 </main>
-<footer>Emulador <a href="https://jsspeccy.zxdemo.org">JSSpeccy 3</a> de Matt Westcott, licencia GPL (ver spectrum/jsspeccy/COPYING.txt). · Versión del juego 20261116e</footer>
+<footer>Emulador <a href="https://jsspeccy.zxdemo.org">JSSpeccy 3</a> de Matt Westcott, licencia GPL (ver spectrum/jsspeccy/COPYING.txt). · Versión del juego 20261120a</footer>
 <div class="frieze"></div>
 <script>
-  // arranca maximizado: el mayor zoom entero que cabe en la ventana (pantalla 320x240 + barras del emulador)
-  function fitZoom() {
-    var z = Math.floor(Math.min(window.innerWidth / 320, (window.innerHeight - 64) / 240));
-    return Math.max(1, Math.min(z, 6));
-  }
+  var game = document.getElementById('game');
+  var pad = document.getElementById('pad');
   var emu = JSSpeccy(document.getElementById('jsspeccy'), {
-    machine: 48, zoom: fitZoom(), sandbox: true, autoStart: false,
-    openUrl: 'spectrum/anubis.z80?v=20261116e#.z80'   // cambia v= en cada versión (evita la copia en caché); el #.z80 final es para que JSSpeccy reconozca el tipo
+    machine: 48, zoom: 1, sandbox: true, autoStart: false,
+    openUrl: 'spectrum/anubis.z80?v=20261120a#.z80'   // cambia v= en cada versión (evita la copia en caché); el #.z80 final es para que JSSpeccy reconozca el tipo
   });
+
+  // ---- tamaño: la pantalla del Spectrum ocupa todo el sitio disponible (escalado con píxeles nítidos)
+  function fit() {
+    var canvas = document.querySelector('#jsspeccy canvas');
+    if (!canvas) return;
+    var app = canvas.parentElement;
+    var full = game.classList.contains('fs');
+    var overlay = full && window.innerWidth > window.innerHeight;   // apaisado: los mandos flotan sobre la imagen
+    game.classList.toggle('overlay', overlay);
+    var padH = (pad.hidden || overlay) ? 0 : pad.offsetHeight + 8;
+    var barH = full ? 0 : document.querySelector('.gamebar').offsetHeight;
+    var w = (full ? window.innerWidth : game.clientWidth) - 4;
+    var h = window.innerHeight - padH - barH - (full ? 70 : 90);   // 70-90 px: barras del emulador
+    var s = Math.max(0.5, Math.min(w / 320, h / 240));
+    canvas.style.width = Math.round(320 * s) + 'px';
+    canvas.style.height = Math.round(240 * s) + 'px';
+    app.style.width = Math.round(320 * s) + 'px';
+  }
   var rz;
-  window.addEventListener('resize', function () {
-    clearTimeout(rz); rz = setTimeout(function () { emu.setZoom(fitZoom()); }, 150);
+  function refit() { clearTimeout(rz); rz = setTimeout(fit, 120); }
+  window.addEventListener('resize', refit);
+  window.addEventListener('orientationchange', refit);
+  emu.on && emu.on('setZoom', refit);
+  var tries = 0, wait = setInterval(function () {
+    if (document.querySelector('#jsspeccy canvas') || ++tries > 50) { clearInterval(wait); fit(); }
+  }, 100);
+
+  // ---- pantalla completa: la del navegador si existe; si no (iPhone), ocupando toda la ventana
+  function isFull() { return document.fullscreenElement || document.webkitFullscreenElement || game.classList.contains('fs'); }
+  function enterFull() {
+    game.classList.add('fs');
+    document.body.classList.add('noscroll');
+    var rq = game.requestFullscreen || game.webkitRequestFullscreen;
+    if (rq) { try { var p = rq.call(game); if (p && p.catch) p.catch(function () {}); } catch (e) {} }
+    document.getElementById('btn-full').textContent = '✕ Salir';
+    refit();
+  }
+  function exitFull() {
+    game.classList.remove('fs');
+    document.body.classList.remove('noscroll');
+    var ex = document.exitFullscreen || document.webkitExitFullscreen;
+    if ((document.fullscreenElement || document.webkitFullscreenElement) && ex) { try { ex.call(document); } catch (e) {} }
+    document.getElementById('btn-full').textContent = '⛶ Pantalla completa';
+    refit();
+  }
+  document.getElementById('btn-full').addEventListener('click', function () { isFull() ? exitFull() : enterFull(); });
+  function onFsChange() { if (!document.fullscreenElement && !document.webkitFullscreenElement && game.classList.contains('fs')) exitFull(); else refit(); }
+  document.addEventListener('fullscreenchange', onFsChange);
+  document.addEventListener('webkitfullscreenchange', onFsChange);
+
+  // ---- mandos táctiles: cada botón pulsa la tecla del Spectrum mientras se mantiene apretado
+  function sendKey(type, code) {
+    var ev = new KeyboardEvent(type, {bubbles: true, cancelable: true});
+    Object.defineProperty(ev, 'keyCode', {get: function () { return code; }});
+    Object.defineProperty(ev, 'which', {get: function () { return code; }});
+    var app = document.querySelector('#jsspeccy canvas');
+    (app ? app.parentElement : document).dispatchEvent(ev);
+  }
+  Array.prototype.forEach.call(pad.querySelectorAll('button[data-k]'), function (b) {
+    var code = +b.dataset.k, down = false;
+    function press(e) { e.preventDefault(); if (!down) { down = true; t0 = Date.now(); b.classList.add('on'); sendKey('keydown', code); } }
+    var t0 = 0;
+    function release(e) {   // una pulsación rápida dura al menos 120 ms, para que el juego llegue a verla
+      if (e) e.preventDefault();
+      if (!down) return;
+      down = false;
+      setTimeout(function () { b.classList.remove('on'); sendKey('keyup', code); }, Math.max(0, 120 - (Date.now() - t0)));
+    }
+    b.addEventListener('pointerdown', function (e) { b.setPointerCapture && b.setPointerCapture(e.pointerId); press(e); });
+    b.addEventListener('pointerup', release);
+    b.addEventListener('pointercancel', release);
+    b.addEventListener('lostpointercapture', release);
+    b.addEventListener('contextmenu', function (e) { e.preventDefault(); });
   });
-  window.addEventListener('load', function () {
-    document.getElementById('jsspeccy').scrollIntoView({block: 'start'});
-  });
+  function showPad(on) {
+    pad.hidden = !on;
+    document.getElementById('btn-pad').classList.toggle('on', on);
+    refit();
+  }
+  document.getElementById('btn-pad').addEventListener('click', function () { showPad(pad.hidden); });
+  // en pantallas táctiles los mandos aparecen solos
+  showPad(window.matchMedia && window.matchMedia('(pointer: coarse)').matches);
 </script>
 </body>
 </html>
