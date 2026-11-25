@@ -2008,7 +2008,6 @@ def build(src_bin='anubis_new.bin', mons_sym='mons.sym'):
     jpat(sym['PSGW'], hs['HPSGW'])
     jpat(sym['WAITJ'], hs['HWAITJ'])
     jpat(sym['PSGDLY'], hs['HPSGDLY'])
-    d[sym['JETSND'] - B] = 0xC9      # no jet pack hiss on the beeper (it would stop the game while it sounds)
     w = sym['WAITJ']; nw = 0
     # waits of the death sequence and of the lotus fade: they also refresh the screen
     for lo, hi in ((sym['DEATH'], sym['CODE10END']), (sym['CNTDOWN'], sym['LOTEND'])):

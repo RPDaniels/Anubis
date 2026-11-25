@@ -259,7 +259,6 @@ MONSTERS:
 MS0:    call PKCHK
         call ENDCHK
         call CANCHK
-        call JETSND
         ld a,(JIFFY)
         ld b,a
         ld a,(LASTJ)
@@ -531,8 +530,6 @@ CANIX:  db 0
 LK:     db 0
 LVAL:   dw 0
 LSTP:   dw 0
-JETY:   db 0
-JETON:  db 0
 CANGATE:
         ld a,(CANF)
         cp 0Fh
@@ -680,39 +677,6 @@ CANP2:
 {CANP2}
 CP2END:
         org 0BB67h              ; unused zero bytes of the original (after a leftover 'BASIC' font)
-; ---- jet pack (MSX only; the Spectrum skips it): a soft noise hiss while the explorer rises
-JETSND: ld hl,1B00h
-        call 004Ah
-        ld hl,JETY
-        ld b,a
-        ld a,(hl)
-        ld (hl),b
-        sub b                   ; previous y - y
-        jr z,JNR
-        jr c,JNR                ; falling
-        cp 8
-        jr nc,JNR               ; room change, not a climb
-        ld a,12                 ; keeps hissing for a few loops between climbing steps
-        ld (JETON),a
-        ld a,7
-        ld e,9Fh                ; noise on channel C only
-        call PSGW
-        ld a,(TICK)
-        and 3
-        add a,7
-        ld e,a
-        ld a,6
-        call PSGW
-        ld a,10
-        ld e,0Bh
-        jp PSGW
-JNR:    ld hl,JETON
-        ld a,(hl)
-        or a
-        ret z
-        dec (hl)
-        ret nz
-        jp SNDOFF
 ; ---- final screen: the four canopic jars (16x16, characters C0-CF of the ending set) under the text
 EJARS:  ld a,0C0h
         ld de,CANPTR

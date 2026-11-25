@@ -119,7 +119,7 @@ for k, (c, t) in enumerate(items):
     dr.rectangle([LEFT + k * 900, ly, LEFT + k * 900 + 30, ly + 30], outline=c, width=4)
     dr.text((LEFT + k * 900 + 45, ly + 2), t, fill=(230, 230, 230), font=fs)
 dr.text((LEFT, ly + 50), ''
-        'Ankh (+1 vida), escarabajos verdes (+25 puntos) y monstruos en su patrulla.  El numero de cada pantalla sirve para el modo secreto 5.',
+        'Ankh (+1 vida), escarabajos verdes (+25 puntos) y monstruos en su patrulla.',
         fill=(200, 200, 200), font=fs)
 sheet.save('mapa_laberinto.png', optimize=True)
 print(sheet.size, len(dist))
