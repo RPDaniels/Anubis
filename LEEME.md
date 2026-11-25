@@ -24,8 +24,8 @@ para ZX Spectrum 48K y una versión web jugable en el navegador.
 - **Objetos:** escarabajo verde = +25 puntos; ankh = +1 vida. Se empieza con 10 vidas.
 - **Vasos canopos:** Imsety, Hapy, Duamutef y Qebehsenuef están escondidos en cuatro pantallas lejanas (vasos blancos que brillan). Al cogerlos aparecen, también en blanco, en el marcador. El loto solo se abre con los cuatro; si falta alguno sale el aviso *NECESITAS LOS CUATRO VASOS*. Sus pantallas están marcadas en `docs/mapa_laberinto.png`.
 - **Monstruos:** serpientes, escorpiones, momias, arañas, murciélagos y gotas. Tocarlos quita una vida.
-- **Final:** el loto cian gigante en la pantalla 240, al fondo de un pasillo sin salida. Al llegar, tus riquezas
-  se descuentan: *"no te llevarás tus riquezas al otro mundo"*.
+- **Final:** el loto cian gigante en la pantalla 240, al fondo de un pasillo sin salida. Al llegar, un acorde de Do mayor
+  baja dos octavas mientras la pantalla se funde a negro y tus riquezas se vacían: *"no te llevarás tus riquezas al otro mundo"*.
 - **Fin de partida:** sin vidas, el explorador cambia de colores mientras suena un tono descendente y
   aparece Anubis: *"Hasta aquí has llegado. Anubis te acoge en su seno."*
 - **Modos secretos (en el menú):** `3` monstruos inofensivos, `4` sin monstruos,
@@ -99,7 +99,7 @@ python3 makez80.py          # ANUBIS_ZX.z80
   A10F-A224, B898-BB34, BBDD-BDDC código de monstruos y objetos · A400-A6CC título ·
   D610-D6C0 texto de fin de partida y sonido de daño · D720-D790 sonidos · D7E0-D8A0 muerte ·
   D900-DC00 cambio de sala y recogibles · DC10-DE40 modo 5 y loto · DE50-DED0 variables ·
-  DEE0-DFF0 cuenta atrás · E000-E5C0 pantallas finales.
+  DEE0-DFF0 llegada al loto (acorde y fundido; también A04C-A0D3, relleno de NOP que el juego atraviesa, y 9C10-9D00) · E000-E5C0 pantallas finales.
 - **Sonido MSX:** arpegio de Do mayor al coger objetos; acorde de Do mayor a tres voces que sube una octava al coger un vaso canopo; dos tonos graves a un semitono al perder vida;
   barrido de agudo a grave al morir. Todo pasa por `PSGW`, `WAITJ` y `PSGDLY`, que el Spectrum sustituye.
 - **Spectrum:** los efectos alternan los canales A, B y C del PSG cada 20 ms (acorde arpegiado); la música del título usa una sola voz limpia.
