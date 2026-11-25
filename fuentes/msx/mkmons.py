@@ -18,6 +18,7 @@ CODE10, CODE10_END = 0xD7E0, 0xD8A0 # empty room slots 34-45 (death sequence)
 DATA2, DATA2_END = 0xD610, 0xD6C0   # empty room slots 5-15 (game-over text)
 
 ASM = r'''
+CANY     equ 87                 ; jars stand on the floor, like the explorer
 DROPTOP  equ 33h                ; drop appears under the ceiling
 DROPLAND equ 57h                ; drop touches the floor
 DROPEND  equ 77h                ; end of the splash
@@ -160,6 +161,30 @@ FLAGADDR:
 FA1:    add a,a
         djnz FA1
         ret
+CANHUD: ld a,(CANIX)            ; status bar: head + body icon (screen and template)
+        add a,99h
+        ld l,a
+        ld h,1Ah
+        ld a,(CANIX)
+        add a,{HEAD0}
+        call 004Dh
+        ld a,(CANIX)
+        add a,0B9h
+        ld l,a
+        ld h,1Ah
+        ld a,{BODYC}
+        call 004Dh
+        ld a,(CANIX)
+        add a,39h
+        ld l,a
+        ld h,0CDh
+        ld a,(CANIX)
+        add a,{HEAD0}
+        ld (hl),a
+        ld de,20h
+        add hl,de
+        ld (hl),{BODYC}
+        ret
 CODE2END:
         org {CODE}h
 GAMESTART:
@@ -175,6 +200,8 @@ GAMESTART:
         ld (MON0),a
         ld (MON1),a
         ld (PKACT),a
+        ld (CANF),a
+        call CANRST
         ld hl,FLAGS
         ld b,33
 GS1:    ld (hl),a
@@ -225,8 +252,10 @@ MONSTERS:
         call NEWROOM
         call MODEFIX
         call PKSETUP
+        call CANSET
 MS0:    call PKCHK
         call ENDCHK
+        call CANCHK
         ld a,(JIFFY)
         ld b,a
         ld a,(LASTJ)
@@ -434,6 +463,52 @@ LOADS:  ld a,(ix+1)
 PKX2:
 {PKX2}
         db 0FFh
+CANCHK: ld a,(CANON)
+        or a
+        ret z
+        ld a,(TICK)             ; the jar glimmers (gold / light yellow)
+        and 8
+        ld a,10
+        jr z,CK0
+        ld a,11
+CK0:    ld hl,1B0Fh
+        call 004Dh
+        ld hl,1B00h             ; touched?
+        call 004Ah
+        add a,9
+        sub CANY+9
+        jr nc,CK1
+        neg
+CK1:    cp 14
+        ret nc
+        ld hl,1B01h
+        call 004Ah
+        ld b,a
+        ld a,(CANSAT+1)
+        ld c,a
+        ld a,b
+        sub c
+        jr nc,CK2
+        neg
+CK2:    cp 12
+        ret nc
+        ld a,(CANON)
+        dec a
+        ld b,a
+        ld (CANIX),a
+        xor a
+        ld (CANON),a
+        call CANBIT
+        ld a,(CANF)
+        or c
+        ld (CANF),a
+        call CNHIDE
+        call CANHUD
+        jp CANFAN
+CANT:   db 0D6h,0AAh,08Fh,06Bh,08Fh,06Bh,055h,047h,035h,0
+CANTXT: db 'FALTAN VASOS CANOPOS'
+CANP3:
+{CANP3}
 CODE3END:
         org {VARS}h
 PKACT:  db 0
@@ -446,6 +521,11 @@ PKADDR: dw 0
 FLAGS:  ds 32
 EXFL:   db 0
 SLOTS:  ds 27
+CANF:   db 0
+CANON:  db 0
+CANMSG: db 0
+CANIX:  db 0
+CANSAT: ds 5
 VARSEND:
         org {CODE4}h
 ENDING: ld hl,ETXT
@@ -463,15 +543,10 @@ SCORE:  ld hl,0CD4Bh
         ld bc,4
         jp 005Ch
 ENDSCR: push hl
-        ld hl,1B00h
+        ld hl,1B00h             ; hide the explorer, the monsters and the canopic jar
+        ld bc,16
         ld a,0D1h
-        call 004Dh
-        ld hl,1B04h
-        ld a,0D1h
-        call 004Dh
-        ld hl,1B08h
-        ld a,0D1h
-        call 004Dh
+        call 0056h
         ld hl,1800h
         ld bc,768
         ld a,20h
@@ -569,6 +644,18 @@ HS1:    push bc
         djnz HS1
         jp SNDOFF
 DATA2END:
+        org 0D6E0h
+CANP0:
+{CANP0}
+CP0END:
+        org 0D7A0h
+CANP1:
+{CANP1}
+CP1END:
+        org 0D8B0h
+CANP2:
+{CANP2}
+CP2END:
         org {CODE9}h
 ; ---- PSG sounds
 PSGW:   out (0A0h),a
@@ -867,7 +954,96 @@ EC1:    cp 16
         neg
 EC2:    cp 18
         ret nc
-        jp CNTDOWN
+        jp CANGATE
+; ---- the four canopic jars (Imsety, Hapy, Duamutef, Qebehsenuef): a gold sprite in their rooms,
+; a blue icon in the status bar once collected; the lotus only opens with all four
+CANSET: xor a
+        ld (CANON),a
+        ld (CANMSG),a
+        ld hl,CANTAB
+        ld b,0
+CN1:    ld a,(LASTR)
+        cp (hl)
+        jr z,CN2
+        inc hl
+        inc hl
+        inc b
+        ld a,b
+        cp 4
+        jr nz,CN1
+CNHIDE: ld hl,1B0Ch
+        ld a,0D1h
+        call 004Dh
+        ld hl,1B10h
+        ld a,0D0h
+        jp 004Dh
+CN2:    call CANBIT
+        ld a,(CANF)
+        and c
+        jr nz,CNHIDE
+        ld a,b
+        inc a
+        ld (CANON),a
+        inc hl
+        ld a,(hl)
+        add a,a
+        add a,a
+        add a,a
+        ld (CANSAT+1),a
+        ld a,CANY
+        ld (CANSAT),a
+        ld a,100
+        ld (CANSAT+2),a
+        ld a,10
+        ld (CANSAT+3),a
+        ld a,0D0h
+        ld (CANSAT+4),a
+        ld a,b                  ; this jar's pattern -> sprite pattern 100
+        add a,a
+        ld e,a
+        ld d,0
+        ld hl,CANPTR
+        add hl,de
+        ld a,(hl)
+        inc hl
+        ld h,(hl)
+        ld l,a
+        ld de,3B20h
+        ld bc,32
+        call 005Ch
+        ld hl,CANSAT
+        ld de,1B0Ch
+        ld bc,5
+        jp 005Ch
+CANBIT: ld c,1                  ; B = jar -> C = its bit
+        ld a,b
+        or a
+        ret z
+CB1:    sla c
+        dec a
+        jr nz,CB1
+        ret
+CANRST: ld hl,0CD39h            ; new game: empty slots
+        ld de,0CD59h
+        ld b,4
+CR1:    ld a,{BLANK}
+        ld (hl),a
+        ld (de),a
+        inc hl
+        inc de
+        djnz CR1
+        ret
+CANFAN: ld a,7                  ; fanfare: the C major chord rising over two octaves
+        ld e,0BEh
+        call PSGW
+        ld a,8
+        ld e,0Dh
+        call PSGW
+        ld hl,CANT
+        jp JS1
+CANTAB:
+{CANTAB}
+CANPTR: dw CANP0, CANP1, CANP2, CANP3
 CODE5END:
         org {CODE6}h
 ; ---- touching the lotus: the riches drain away while the explorer flashes in colours
@@ -984,6 +1160,20 @@ PE2:    ld de,32
         ret nz
         inc hl
         jp 004Dh
+CANGATE:
+        ld a,(CANF)
+        cp 0Fh
+        jp z,CNTDOWN
+        ld a,(CANMSG)
+        or a
+        ret nz
+        inc a
+        ld (CANMSG),a
+        ld hl,CANTXT
+        ld de,1800h+{MSGROW}*32+6
+        ld bc,20
+        call 005Ch
+        jp HURTSND
 CODE6END:
         org {CODE7}h
 NEWROOM:
@@ -1366,7 +1556,12 @@ def post_patch(d):
     pkx2 = []
     for room, codes_ in sorted(_g.MULTI_PICKUPS.items()):
         pkx2 += [room] + codes_[1:3]
-    src = ASM.format(CODE9='0%X' % CODE9, CODE10='0%X' % CODE10, DATA2='0%X' % DATA2, ETXT=tseg(ending.TEXT, etr), GTXT=tseg(ending.GO_TEXT, etr), CODE8='0%X' % CODE8, PKX2=db_lines(pkx2) if pkx2 else '', CODE7='0%X' % CODE7, PATS2=db_lines(monsters.pattern_data2()), CODE6='0%X' % CODE6, CODE5='0%X' % CODE5, PROMPT=0x1800 + 14 * 32 + 9, D0=0xA8, CUR=0xB2,
+    import canopic_art
+    can = monsters.canopic_rooms(m, lambda r: gen.room_entries(m, r), gen.OBJDEFS_BY_ID)
+    print('canopic jars:', ', '.join('%s room %d col %d' % (n, r, c) for n, (r, c) in zip(canopic_art.NAMES, can)))
+    canpat = []
+    for n in canopic_art.NAMES: canpat += monsters.sprite_bytes(canopic_art.sprite(n))
+    src = ASM.format(CANTAB=db_lines([v for rc in can for v in rc]), CANP0=db_lines(canpat[0:32]), CANP1=db_lines(canpat[32:64]), CANP2=db_lines(canpat[64:96]), CANP3=db_lines(canpat[96:128]), HEAD0=canopic_art.HEAD_CHARS[0], BODYC=canopic_art.BODY_CHAR, MSGROW=3, CODE9='0%X' % CODE9, CODE10='0%X' % CODE10, DATA2='0%X' % DATA2, ETXT=tseg(ending.TEXT, etr), GTXT=tseg(ending.GO_TEXT, etr), CODE8='0%X' % CODE8, PKX2=db_lines(pkx2) if pkx2 else '', CODE7='0%X' % CODE7, PATS2=db_lines(monsters.pattern_data2()), CODE6='0%X' % CODE6, CODE5='0%X' % CODE5, PROMPT=0x1800 + 14 * 32 + 9, D0=0xA8, CUR=0xB2,
                      TXT=','.join(map(str, txt)), M5TAB=db_lines([x for p in m5 for x in p]), M5COUNT=len(m5),
                      CODE4='0%X' % CODE4, LROOM=gen.LOTUS_ROOM, LCY=lr * 8 + 12, LCX=lc * 8 + 16,
                      NPAT=len(ent_pats), ECOL=db_lines(ecol), EPAT=db_lines(epat), ESEG=eseg,
@@ -1403,7 +1598,8 @@ def post_patch(d):
     c7 = sym['CODE7END']
     print('code7 %04X-%04X' % (CODE7, c7 - 1))
     assert c7 <= CODE7_END
-    for nm, lo, hi in (('DATA2', DATA2, DATA2_END), ('CODE9', CODE9, CODE9_END), ('CODE10', CODE10, CODE10_END)):
+    for nm, lo, hi in (('DATA2', DATA2, DATA2_END), ('CODE9', CODE9, CODE9_END), ('CODE10', CODE10, CODE10_END),
+                       ('CP0', 0xD6E0, 0xD710), ('CP1', 0xD7A0, 0xD7D0), ('CP2', 0xD8B0, 0xD8E0)):
         e = sym[nm + 'END']
         print('%s %04X-%04X (limit %04X)' % (nm, lo, e - 1, hi))
         assert e <= hi

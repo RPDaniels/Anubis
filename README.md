@@ -19,10 +19,11 @@ Conversión para ZX Spectrum 48K y una versión web jugable en el navegador.
 
 ## Cómo jugar
 
-- **Menú:** `1` teclado, `2` joystick, `0` empezar. La melodía del título suena entera antes de que el menú responda.
+- **Menú:** `1` teclado, `2` joystick, `0` empezar. La melodía del título se corta al elegir una opción.
 - **Mover:** cursores (en Spectrum también `Q` `A` `O` `P` o `5` `6` `7` `8`, y joystick Kempston con la opción 2).
   El explorador lleva un jet pack para subir por los pozos.
 - **Objetos:** escarabajo verde = +25 puntos; ankh = +1 vida. Se empieza con 10 vidas.
+- **Vasos canopos:** Imsety, Hapy, Duamutef y Qebehsenuef están escondidos en cuatro pantallas lejanas (vasos dorados que brillan). Al cogerlos aparecen en azul en el marcador. El loto solo se abre con los cuatro; si falta alguno sale el aviso *FALTAN VASOS CANOPOS*. Sus pantallas están marcadas en `docs/mapa_laberinto.png`.
 
 ## Cargar en máquinas reales y emuladores
 
@@ -65,9 +66,10 @@ python3 makez80.py          # ANUBIS_ZX.z80
 | `build.py`                   | Aplica tiles y colores y retoca plantillas y marcador                                                       |
 | `make.py`                    | Rutina Z80 de decoración, listas por sala, despachador de rutinas originales, título; empaqueta el CAS      |
 | `title.py`                   | Decoración de la pantalla de título                                                                         |
-| `monsters.py`                | Sprites (serpiente, escorpión, momia, araña, murciélago, gota), patrullas, colocación de recogibles         |
+| `monsters.py`                | Sprites (serpiente, escorpión, momia, araña, murciélago, gota), patrullas, colocación de recogibles y de los vasos canopos         |
 | `mkmons.py`                  | Código Z80 de monstruos, vidas, puntos, objetos, sonidos PSG, muerte, modos 3/4/5, loto y pantallas finales |
 | `ending.py`, `ending_art.py` | Pantallas finales con Anubis grande (llegada al loto y fin de partida)                                      |
+| `canopic_art.py` | Dibujo de los cuatro vasos canopos (sprite 16x16 e icono del marcador) |
 | `mkrom.py`                   | Versión cartucho de 32 KB con cargador                                                                      |
 | `mapa.py`                    | Mapa completo del laberinto (alcance con jet pack, camino más corto al loto)                                |
 | `cas2wav.py`                 | Conversor CAS a WAV (1200 baudios)                                                                          |

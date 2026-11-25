@@ -19,6 +19,7 @@ def patch_margins(d):
         if v == 0x20: v = art.BLANK
         elif v == 0xdb:
             if r in (0, 4) or c in (2, 30): v = art.STATUS_BORDER
+            elif r == 2 and c in (26, 28): v = art.BLANK      # room for the four canopic jars
             else: v = art.ANKH_SMALL
         d[0xcd00-B+i] = v
     for k, ch in enumerate('PUNTOS'):

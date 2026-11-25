@@ -327,9 +327,10 @@ def pickup_table(m, entries_for, objdefs):
     """byte per room: bits0-4 column, bit6 = ankh (else green scarab, 2x2), bit7 = elevated (rows 8-9, else 11-12)"""
     tab = []
     stats = {'ankh': 0, 'scarab': 0}
+    jars = {r for r, _ in canopic_rooms(m, entries_for, objdefs)}
     for r in range(256):
         rng = random.Random(777 + r * 13)
-        if r == 240:
+        if r == 240 or r in jars:            # the lotus room and the canopic-jar rooms have no other pickup
             tab.append(0); continue
         import gen
         if r in gen.MULTI_PICKUPS:
@@ -367,3 +368,52 @@ def pickup_table(m, entries_for, objdefs):
         stats['ankh' if kind else 'scarab'] += 1
         tab.append(v)
     return tab, stats
+
+# ---------------------------------------------------------------- the four canopic jars (needed to open the lotus)
+JAR_NAMES = ['Imsety', 'Hapy', 'Duamutef', 'Qebehsenuef']
+_CANOPIC = None
+def connectivity(m):
+    """per room (left, right, down, up) open, from the original layout (the 4 collision cells)"""
+    from rooms import Mem
+    info = {}
+    for r in range(256):
+        nt = sim.compose(m, r, decor=False)[0x1800:0x1b00]
+        info[r] = (nt[11*32+13] == 0x20, nt[11*32+18] == 0x20, nt[16*32+16] == 0x20, nt[6*32+16] == 0x20)
+    return info
+def bfs(info, start):
+    from collections import deque
+    dist = {start: 0}; q = deque([start])
+    while q:
+        r = q.popleft(); L, R, D, U = info[r]
+        for ok, n in ((L, (r-1) % 256), (R, (r+1) % 256), (D, (r+16) % 256), (U, (r-16) % 256)):
+            if ok and n not in dist: dist[n] = dist[r] + 1; q.append(n)
+    return dist
+def canopic_rooms(m, entries_for, objdefs):
+    """four reachable rooms, far from the start and from each other, each with a free floor spot
+    (2 columns, rows 11-12 open over a solid row 13, away from the explorer's centre columns).
+    Returns [(room, column)] in the order Imsety, Hapy, Duamutef, Qebehsenuef."""
+    global _CANOPIC
+    if _CANOPIC: return _CANOPIC
+    import gen
+    info = connectivity(m)
+    d0 = bfs(info, 0)
+    spots = {}
+    for r in d0:
+        if r in (0, gen.LOTUS_ROOM) or r in gen.MULTI_PICKUPS: continue
+        nt = sim.compose(m, r, entries=entries_for(r), objdefs=objdefs)[0x1800:0x1b00]
+        cands = []
+        for c in range(4, 27):
+            if any(cc in range(12, 20) for cc in (c, c + 1)): continue
+            if any(nt[13*32+cc] == 0x20 for cc in (c, c + 1)): continue
+            if all(nt[y*32+cc] == 0x20 for y in (10, 11, 12) for cc in range(c - 1, c + 3)):
+                cands.append(c)
+        if cands: spots[r] = min(cands, key=lambda c: abs(c - 16))
+    anchors = {0: d0, gen.LOTUS_ROOM: bfs(info, gen.LOTUS_ROOM)}   # far from the start, the lotus and each other
+    chosen = []
+    while len(chosen) < 4:
+        best = max((r for r in spots if r not in chosen and d0[r] >= 12),
+                   key=lambda r: (min(a.get(r, 0) for a in anchors.values()), d0[r]))
+        chosen.append(best); anchors[best] = bfs(info, best)
+    chosen.sort(key=lambda r: d0[r])
+    _CANOPIC = [(r, spots[r]) for r in chosen]
+    return _CANOPIC

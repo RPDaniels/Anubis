@@ -1,7 +1,7 @@
 import sys
 from collections import deque
 from PIL import Image, ImageDraw, ImageFont
-import gen, sim, monsters, art
+import gen, sim, monsters, art, canopic_art
 from rooms import Mem
 from build import apply_art, patch_margins
 from render import render
@@ -12,6 +12,8 @@ ent = {r: gen.room_entries(m, r) for r in range(256)}
 pk, _ = monsters.pickup_table(m, lambda r: ent[r], gen.OBJDEFS_BY_ID)
 slots = monsters.type_slots(m); codes = monsters.room_codes(m, slots)
 pat = monsters.pattern_data()
+JARS = {r: (c, k) for k, (r, c) in enumerate(monsters.canopic_rooms(m, lambda r: ent[r], gen.OBJDEFS_BY_ID))}
+JCOL = (235, 120, 60)
 # connectivity
 info = {}
 for r in range(256):
@@ -54,6 +56,12 @@ def room_img(r):
         sat += [0x48, spid2[bb - 6], 88, 7]
     elif bb == 3:
         k = a % 3 + 1; lo, hi = segs2[1 - aseg]; sat += [0x57, (lo + hi) // 2, monsters.BASES[k] + 8, monsters.COLORS[k]]
+    if r in JARS:   # canopic jar: gold sprite 25 at y 87
+        jc, k = JARS[r]
+        rows = canopic_art.sprite(canopic_art.NAMES[k])
+        sp = monsters.sprite_bytes(rows)
+        v[0x3800 + 25*32:0x3800 + 26*32] = bytes(sp)
+        sat += [87, jc * 8, 100, 10]
     sat += [208]
     v[0x1b00:0x1b00 + len(sat)] = bytes(sat)
     render(v, REGS, '_tmp_render.png', sprites=True, scale=1)
@@ -81,6 +89,7 @@ for r in range(256):
     if r in path: col = (240, 200, 60)
     if r == 0: col = (80, 230, 110)
     if r == LOT: col = (130, 160, 255)
+    if r in JARS: col = JCOL
     w = 4 if r in path or r in (0, LOT) else 1
     if r in (0, LOT):
         dr.rectangle([x, y, x + TW - 1, y + TH - 1], outline=col, width=w)
@@ -96,11 +105,16 @@ dr = ImageDraw.Draw(sheet)
 for r in (0, LOT):
     x, y = pos(r); col = (80, 230, 110) if r == 0 else (130, 160, 255)
     dr.rectangle([x, y, x + TW - 1, y + TH - 1], outline=col, width=5)
+for r, (c, k) in JARS.items():
+    x, y = pos(r)
+    dr.rectangle([x, y, x + TW - 1, y + TH - 1], outline=JCOL, width=5)
+    dr.rectangle([x + TW - 150, y + TH - 22, x + TW - 1, y + TH - 1], fill=(0, 0, 0))
+    dr.text((x + TW - 146, y + TH - 21), canopic_art.NAMES[k], fill=JCOL, font=f)
 for i in range(16):
     dr.text((LEFT + i * (TW + GAP) + TW // 2 - 10, TOP - 26), str(i), fill=(180, 180, 180), font=f)
 ly = TOP + 16 * (TH + GAP) + 25
 items = [((80, 230, 110), 'Inicio (pantalla 0)'), ((130, 160, 255), 'Loto gigante (pantalla %d, final)' % LOT),
-         ((240, 200, 60), 'Camino mas corto hasta el loto (linea dorada)')]
+         ((240, 200, 60), 'Camino mas corto hasta el loto (linea dorada)'), (JCOL, 'Vasos canopos (hacen falta los 4)')]
 for k, (c, t) in enumerate(items):
     dr.rectangle([LEFT + k * 900, ly, LEFT + k * 900 + 30, ly + 30], outline=c, width=4)
     dr.text((LEFT + k * 900 + 45, ly + 2), t, fill=(230, 230, 230), font=fs)
