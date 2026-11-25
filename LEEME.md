@@ -100,9 +100,9 @@ python3 makez80.py          # ANUBIS_ZX.z80
   D610-D6C0 texto de fin de partida y sonido de daño · D720-D790 sonidos · D7E0-D8A0 muerte ·
   D900-DC00 cambio de sala y recogibles · DC10-DE40 modo 5 y loto · DE50-DED0 variables ·
   DEE0-DFF0 cuenta atrás · E000-E5C0 pantallas finales.
-- **Sonido MSX:** arpegio de Do mayor al coger objetos; dos tonos graves a un semitono al perder vida;
+- **Sonido MSX:** arpegio de Do mayor al coger objetos; acorde de Do mayor a tres voces que sube una octava al coger un vaso canopo; dos tonos graves a un semitono al perder vida;
   barrido de agudo a grave al morir. Todo pasa por `PSGW`, `WAITJ` y `PSGDLY`, que el Spectrum sustituye.
-- **Spectrum:** el motor de altavoz alterna las dos voces en cada muestra (unos 25 kHz), lo que permite oír a la vez
+- **Spectrum:** los efectos alternan los canales A, B y C del PSG cada 20 ms (acorde arpegiado); la música del título usa una sola voz limpia.
   el arpegio y la melodía del título.
 
 ## Créditos

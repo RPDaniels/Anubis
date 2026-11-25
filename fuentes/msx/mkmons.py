@@ -505,7 +505,6 @@ CK2:    cp 12
         call CNHIDE
         call CANHUD
         jp CANFAN
-CANT:   db 0D6h,0AAh,08Fh,06Bh,08Fh,06Bh,055h,047h,035h,0
 CANTXT: db 'FALTAN VASOS CANOPOS'
 CANP3:
 {CANP3}
@@ -656,6 +655,59 @@ CP1END:
 CANP2:
 {CANP2}
 CP2END:
+        org 9C40h
+; ---- canopic jar fanfare: a C major chord on the three PSG voices gliding up an octave
+; (one semitone every two frames), then held while it fades out
+CANFAN: ld hl,CFINIT
+CF0:    ld a,(hl)
+        cp 0FFh
+        jr z,CF1
+        inc hl
+        ld e,(hl)
+        inc hl
+        call PSGW
+        jr CF0
+CF1:    inc hl
+CF2:    ld a,(hl)
+        or a
+        jr z,CF4
+        ld c,0
+CF3:    ld a,c
+        ld e,(hl)
+        call PSGW
+        inc hl
+        inc c
+        ld a,c
+        cp 6
+        jr nz,CF3
+        push hl
+        ld b,2
+        call WAITJ
+        pop hl
+        jr CF2
+CF4:    ld d,0Dh
+CF5:    ld e,d
+        ld a,8
+        call PSGW
+        ld a,9
+        call PSGW
+        ld a,10
+        call PSGW
+        ld b,3
+        call WAITJ
+        dec d
+        ld a,d
+        cp 4
+        jr nz,CF5
+        ld a,10
+        ld e,0
+        call PSGW
+        jp SNDOFF
+CFINIT: db 7,0B8h,8,0Dh,9,0Dh,10,0Dh,0FFh
+CFTAB:
+{CFTAB}
+        db 0
+CP3END:
         org {CODE9}h
 ; ---- PSG sounds
 PSGW:   out (0A0h),a
@@ -1033,14 +1085,6 @@ CR1:    ld a,{BLANK}
         inc de
         djnz CR1
         ret
-CANFAN: ld a,7                  ; fanfare: the C major chord rising over two octaves
-        ld e,0BEh
-        call PSGW
-        ld a,8
-        ld e,0Dh
-        call PSGW
-        ld hl,CANT
-        jp JS1
 CANTAB:
 {CANTAB}
 CANPTR: dw CANP0, CANP1, CANP2, CANP3
@@ -1524,6 +1568,15 @@ CODE8END:
 def db_lines(data, per=16):
     return '\n'.join('        db ' + ','.join(str(b) for b in data[i:i + per]) for i in range(0, len(data), per))
 
+def chord_table():
+    # C4-E4-G4 rising one semitone per step up to C5-E5-G5 (PSG clock 1.79 MHz): periods of channels A, B, C
+    out = []
+    for k in range(13):
+        for f in (523.25, 659.26, 783.99):
+            p = round(3579545 / 2 / 16 / (f / 2 * 2 ** (k / 12)))
+            out += [p & 255, p >> 8]
+    return out
+
 def post_patch(d):
     m = Mem(bytes(d))
     slots = monsters.type_slots(m)
@@ -1561,7 +1614,7 @@ def post_patch(d):
     print('canopic jars:', ', '.join('%s room %d col %d' % (n, r, c) for n, (r, c) in zip(canopic_art.NAMES, can)))
     canpat = []
     for n in canopic_art.NAMES: canpat += monsters.sprite_bytes(canopic_art.sprite(n))
-    src = ASM.format(CANTAB=db_lines([v for rc in can for v in rc]), CANP0=db_lines(canpat[0:32]), CANP1=db_lines(canpat[32:64]), CANP2=db_lines(canpat[64:96]), CANP3=db_lines(canpat[96:128]), HEAD0=canopic_art.HEAD_CHARS[0], BODYC=canopic_art.BODY_CHAR, MSGROW=3, CODE9='0%X' % CODE9, CODE10='0%X' % CODE10, DATA2='0%X' % DATA2, ETXT=tseg(ending.TEXT, etr), GTXT=tseg(ending.GO_TEXT, etr), CODE8='0%X' % CODE8, PKX2=db_lines(pkx2) if pkx2 else '', CODE7='0%X' % CODE7, PATS2=db_lines(monsters.pattern_data2()), CODE6='0%X' % CODE6, CODE5='0%X' % CODE5, PROMPT=0x1800 + 14 * 32 + 9, D0=0xA8, CUR=0xB2,
+    src = ASM.format(CFTAB=db_lines(chord_table()), CANTAB=db_lines([v for rc in can for v in rc]), CANP0=db_lines(canpat[0:32]), CANP1=db_lines(canpat[32:64]), CANP2=db_lines(canpat[64:96]), CANP3=db_lines(canpat[96:128]), HEAD0=canopic_art.HEAD_CHARS[0], BODYC=canopic_art.BODY_CHAR, MSGROW=3, CODE9='0%X' % CODE9, CODE10='0%X' % CODE10, DATA2='0%X' % DATA2, ETXT=tseg(ending.TEXT, etr), GTXT=tseg(ending.GO_TEXT, etr), CODE8='0%X' % CODE8, PKX2=db_lines(pkx2) if pkx2 else '', CODE7='0%X' % CODE7, PATS2=db_lines(monsters.pattern_data2()), CODE6='0%X' % CODE6, CODE5='0%X' % CODE5, PROMPT=0x1800 + 14 * 32 + 9, D0=0xA8, CUR=0xB2,
                      TXT=','.join(map(str, txt)), M5TAB=db_lines([x for p in m5 for x in p]), M5COUNT=len(m5),
                      CODE4='0%X' % CODE4, LROOM=gen.LOTUS_ROOM, LCY=lr * 8 + 12, LCX=lc * 8 + 16,
                      NPAT=len(ent_pats), ECOL=db_lines(ecol), EPAT=db_lines(epat), ESEG=eseg,
@@ -1599,7 +1652,7 @@ def post_patch(d):
     print('code7 %04X-%04X' % (CODE7, c7 - 1))
     assert c7 <= CODE7_END
     for nm, lo, hi in (('DATA2', DATA2, DATA2_END), ('CODE9', CODE9, CODE9_END), ('CODE10', CODE10, CODE10_END),
-                       ('CP0', 0xD6E0, 0xD710), ('CP1', 0xD7A0, 0xD7D0), ('CP2', 0xD8B0, 0xD8E0)):
+                       ('CP0', 0xD6E0, 0xD710), ('CP1', 0xD7A0, 0xD7D0), ('CP2', 0xD8B0, 0xD8E0), ('CP3', 0x9C40, 0x9D00)):
         e = sym[nm + 'END']
         print('%s %04X-%04X (limit %04X)' % (nm, lo, e - 1, hi))
         assert e <= hi

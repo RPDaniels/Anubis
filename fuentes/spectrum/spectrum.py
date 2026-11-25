@@ -1758,7 +1758,7 @@ HIEND:
 ; ---- sound code below the stack (loaded with the game image)
         org 7600h
 ; ---- AY emulation for the game's sound effects: register writes go to a shadow,
-; the waits play the current tones of channels A and B on the beeper
+; the waits play the current tones of channels A, B and C on the beeper
 PSGR:   ds 16
 HPSGW:  push hl
         ld hl,PSGR
@@ -1809,30 +1809,49 @@ CHOFF:  xor a
         ret
 SFX:    push ix                 ; HL = duration
         push hl
+        push bc
         ld ix,PSGR
         ld hl,PSGR+8
         ld c,1
         call CHHALF
-        push af
+        ld (SFXH),a
         ld ix,PSGR+2
         ld hl,PSGR+9
         ld c,2
         call CHHALF
+        ld (SFXH+1),a
+        ld ix,PSGR+4
+        ld hl,PSGR+10
+        ld c,4
+        call CHHALF
+        ld (SFXH+2),a
+        ld a,(SFXALT)           ; several channels sounding: take turns call by call (20 ms slices)
+        ld b,3
+SFX1:   inc a
+        cp 3
+        jr c,SFX2
+        xor a
+SFX2:   ld c,a
         ld e,a
-        pop af
-        ld d,a
+        ld d,0
+        ld hl,SFXH
+        add hl,de
+        ld a,(hl)
+        or a
+        jr nz,SFX3
+        ld a,c
+        djnz SFX1
+        xor a                   ; all silent
+SFX3:   ld d,a                  ; D = half period (0: silence)
+        ld e,0
+        ld a,c
+        ld (SFXALT),a
+        pop bc
         pop hl
         pop ix
-        ld a,e                  ; both channels sounding: alternate them call by call (20 ms slices)
-        or a
-        jr z,SFX3
-        ld a,(SFXALT)
-        xor 1
-        ld (SFXALT),a
-        jr z,SFX3
-        ld d,0                  ; this slice: channel B
-SFX3:   jp TONE2
+        jp TONE2
 SFXALT: db 0
+SFXH:   ds 3
 HWAITJ: push hl                 ; B jiffies of sound
         push de
 HWJ1:   push bc
