@@ -259,6 +259,7 @@ MONSTERS:
 MS0:    call PKCHK
         call ENDCHK
         call CANCHK
+        call JETSND
         ld a,(JIFFY)
         ld b,a
         ld a,(LASTJ)
@@ -530,6 +531,8 @@ CANIX:  db 0
 LK:     db 0
 LVAL:   dw 0
 LSTP:   dw 0
+JETY:   db 0
+JETON:  db 0
 CANGATE:
         ld a,(CANF)
         cp 0Fh
@@ -549,6 +552,7 @@ VARSEND:
         org {CODE4}h
 ENDING: ld hl,ETXT
         call ENDSCR
+        call EJARS
         call SCORE
         call 8C00h
 EW:     xor a
@@ -675,6 +679,66 @@ CP1END:
 CANP2:
 {CANP2}
 CP2END:
+        org 0BB67h              ; unused zero bytes of the original (after a leftover 'BASIC' font)
+; ---- jet pack (MSX only; the Spectrum skips it): a soft noise hiss while the explorer rises
+JETSND: ld hl,1B00h
+        call 004Ah
+        ld hl,JETY
+        ld b,a
+        ld a,(hl)
+        ld (hl),b
+        sub b                   ; previous y - y
+        jr z,JNR
+        jr c,JNR                ; falling
+        cp 8
+        jr nc,JNR               ; room change, not a climb
+        ld a,12                 ; keeps hissing for a few loops between climbing steps
+        ld (JETON),a
+        ld a,7
+        ld e,9Fh                ; noise on channel C only
+        call PSGW
+        ld a,(TICK)
+        and 3
+        add a,7
+        ld e,a
+        ld a,6
+        call PSGW
+        ld a,10
+        ld e,0Bh
+        jp PSGW
+JNR:    ld hl,JETON
+        ld a,(hl)
+        or a
+        ret z
+        dec (hl)
+        ret nz
+        jp SNDOFF
+; ---- final screen: the four canopic jars (16x16, characters C0-CF of the ending set) under the text
+EJARS:  ld a,0C0h
+        ld de,CANPTR
+EJ1:    push af
+        push de
+        ex de,hl
+        ld e,(hl)
+        inc hl
+        ld d,(hl)
+        ld l,a
+        ld h,0
+        add hl,hl
+        add hl,hl
+        add hl,hl
+        ex de,hl
+        ld bc,32
+        call 005Ch
+        pop de
+        inc de
+        inc de
+        pop af
+        add a,4
+        cp 0D0h
+        jr nz,EJ1
+        jp EJN2
+CODE12END:
         org 0A04Ch              ; NOP padding the game runs through (after the call at A049): jump over it
         jp 0A0F4h
 LPREP:
@@ -746,6 +810,21 @@ DK2:    call 004Ah
         ld de,4
         add hl,de
         djnz DK2
+        ret
+EJN2:   ld hl,1800h+{EJROW}*32+{EJCOL}   ; jar tops (TL TR), then bottoms (BL BR)
+        ld a,0C0h
+        call ENR
+        ld hl,1800h+{EJROW}*32+32+{EJCOL}
+        ld a,0C1h
+ENR:    ld b,4
+ER1:    call 004Dh
+        inc hl
+        add a,2
+        call 004Dh
+        inc hl
+        inc hl
+        add a,2
+        djnz ER1
         ret
 CODE11END:
         org 9C10h
@@ -857,6 +936,8 @@ SNDOFF: ld a,8
         ld e,0
         call PSGW
         ld a,9
+        call PSGW
+        ld a,10
         call PSGW
         ld a,7
         ld e,0B8h
@@ -1736,7 +1817,7 @@ def post_patch(d):
     print('canopic jars:', ', '.join('%s room %d col %d' % (n, r, c) for n, (r, c) in zip(canopic_art.NAMES, can)))
     canpat = []
     for n in canopic_art.NAMES: canpat += monsters.sprite_bytes(canopic_art.sprite(n))
-    src = ASM.format(SLOTH=canopic_art.SLOT_HEAD, SLOTB=canopic_art.SLOT_BODY, CFTAB=db_lines(chord_table()), CANTAB=db_lines([v for rc in can for v in rc]), CANP0=db_lines(canpat[0:32]), CANP1=db_lines(canpat[32:64]), CANP2=db_lines(canpat[64:96]), CANP3=db_lines(canpat[96:128]), HEADS=','.join('%d' % c for c in canopic_art.HEAD_CHARS), CANMSGTXT=canopic_art.MESSAGE, MSGLEN=len(canopic_art.MESSAGE), MSGCOL=(32 - len(canopic_art.MESSAGE)) // 2, BODYC=canopic_art.BODY_CHAR, MSGROW=3, CODE9='0%X' % CODE9, CODE10='0%X' % CODE10, DATA2='0%X' % DATA2, ETXT=tseg(ending.TEXT, etr), GTXT=tseg(ending.GO_TEXT, etr), CODE8='0%X' % CODE8, PKX2=db_lines(pkx2) if pkx2 else '', CODE7='0%X' % CODE7, PATS2=db_lines(monsters.pattern_data2()), CODE6='0%X' % CODE6, CODE5='0%X' % CODE5, PROMPT=0x1800 + 14 * 32 + 9, D0=0xA8, CUR=0xB2,
+    src = ASM.format(EJROW=14, EJCOL=16, SLOTH=canopic_art.SLOT_HEAD, SLOTB=canopic_art.SLOT_BODY, CFTAB=db_lines(chord_table()), CANTAB=db_lines([v for rc in can for v in rc]), CANP0=db_lines(canpat[0:32]), CANP1=db_lines(canpat[32:64]), CANP2=db_lines(canpat[64:96]), CANP3=db_lines(canpat[96:128]), HEADS=','.join('%d' % c for c in canopic_art.HEAD_CHARS), CANMSGTXT=canopic_art.MESSAGE, MSGLEN=len(canopic_art.MESSAGE), MSGCOL=(32 - len(canopic_art.MESSAGE)) // 2, BODYC=canopic_art.BODY_CHAR, MSGROW=3, CODE9='0%X' % CODE9, CODE10='0%X' % CODE10, DATA2='0%X' % DATA2, ETXT=tseg(ending.TEXT, etr), GTXT=tseg(ending.GO_TEXT, etr), CODE8='0%X' % CODE8, PKX2=db_lines(pkx2) if pkx2 else '', CODE7='0%X' % CODE7, PATS2=db_lines(monsters.pattern_data2()), CODE6='0%X' % CODE6, CODE5='0%X' % CODE5, PROMPT=0x1800 + 14 * 32 + 9, D0=0xA8, CUR=0xB2,
                      TXT=','.join(map(str, txt)), M5TAB=db_lines([x for p in m5 for x in p]), M5COUNT=len(m5),
                      CODE4='0%X' % CODE4, LROOM=gen.LOTUS_ROOM, LCY=lr * 8 + 12, LCX=lc * 8 + 16,
                      NPAT=len(ent_pats), ECOL=db_lines(ecol), EPAT=db_lines(epat), ESEG=eseg,
@@ -1774,7 +1855,7 @@ def post_patch(d):
     print('code7 %04X-%04X' % (CODE7, c7 - 1))
     assert c7 <= CODE7_END
     for nm, lo, hi in (('DATA2', DATA2, DATA2_END), ('CODE9', CODE9, CODE9_END), ('CODE10', CODE10, CODE10_END),
-                       ('CP0', 0xD6E0, 0xD710), ('CP1', 0xD7A0, 0xD7D0), ('CP2', 0xD8B0, 0xD8E0), ('CP3', 0x9C10, 0x9D00), ('CODE11', 0xA04B, 0xA0D3)):
+                       ('CP0', 0xD6E0, 0xD710), ('CP1', 0xD7A0, 0xD7D0), ('CP2', 0xD8B0, 0xD8E0), ('CP3', 0x9C10, 0x9D00), ('CODE11', 0xA04C, 0xA0EA), ('CODE12', 0xBB67, 0xBBDD)):
         e = sym[nm + 'END']
         print('%s %04X-%04X (limit %04X)' % (nm, lo, e - 1, hi))
         assert e <= hi
