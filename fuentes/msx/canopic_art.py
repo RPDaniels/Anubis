@@ -58,8 +58,6 @@ BODY_CHAR = 0x57                        # letter W, also unused (group 0x50, whi
 SLOT_HEAD, SLOT_BODY = 0x2E, 0x2F
 SLOT8 = ['..###...', '.#...#..', '.#...#..', '..#.#...', '..#.#...', '.#...#..', '.#####..', '#.....#.']
 SLOTB8 = ['#.....#.', '#.....#.', '.#...#..', '.#...#..', '..#.#...', '.#...#..', '.#####..', '........']
-# title hint (no letter of it may be one of the icon letters, which the title copies from the game font)
-HINT = 'ENCUENTRA LOS 4 VASOS CANOPOS'
 # lotus message (it must not use the letters above)
 MESSAGE = 'NECESITAS LOS CUATRO VASOS'
-assert not (set(MESSAGE) | set(HINT)) & {chr(x) for x in HEAD_CHARS + [BODY_CHAR]}
+assert not set(MESSAGE) & {chr(x) for x in HEAD_CHARS + [BODY_CHAR]}

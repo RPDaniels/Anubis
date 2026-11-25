@@ -17,13 +17,6 @@ group(29, (11, 1), list(range(0xD0, 0xD6)) + [0x3C, 0x3D])
 group(30, (8, 1), [0x74, 0x75, 0x76, 0x77, 0x5F, 0x5E])
 group(31, (5, 1), [0xE8, 0xE9, 0xEA, 0xEB])
 group(24, (10, 1), [0xE0, 0xE7])   # mirrored cat (faces right)
-# objective line under the logo: white letters copied from the game font (groups 16-17, unused by the title)
-import canopic_art
-HINT_ROW = 4
-_hl = sorted(set(canopic_art.HINT) - {' '})
-assert len(_hl) <= 16
-group(16, (15, 1), [ord(ch) for ch in _hl[:8]])
-group(17, (15, 1), [ord(ch) for ch in _hl[8:]])
 MAP = {}
 for dest, src in SLOTS.items():
     MAP.setdefault(src, dest)
@@ -75,9 +68,6 @@ def overlay():
     putobj('torch', 8, 28)
     putobj('eye', 14, 15)
     putobj('scarab', 9, 22) if False else None
-    h = canopic_art.HINT
-    for i, ch in enumerate(h):
-        if ch != ' ': put(HINT_ROW, (32 - len(h)) // 2 + i, ord(ch))
     return nt
 
 def segments(nt):
