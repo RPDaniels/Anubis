@@ -2009,10 +2009,12 @@ def build(src_bin='anubis_new.bin', mons_sym='mons.sym'):
     jpat(sym['WAITJ'], hs['HWAITJ'])
     jpat(sym['PSGDLY'], hs['HPSGDLY'])
     w = sym['WAITJ']; nw = 0
-    for a in range(sym['DEATH'], sym['CODE10END'] - 2):
-        if d[a - B] == 0xCD and (d[a - B + 1] | d[a - B + 2] << 8) == w:
-            d[a - B + 1] = hs['HWAITP'] & 255; d[a - B + 2] = hs['HWAITP'] >> 8; nw += 1
-    assert nw == 2
+    # waits of the death sequence and of the lotus fade: they also refresh the screen
+    for lo, hi in ((sym['DEATH'], sym['CODE10END']), (sym['CNTDOWN'], sym['LOTEND'])):
+        for a in range(lo, hi - 2):
+            if d[a - B] == 0xCD and (d[a - B + 1] | d[a - B + 2] << 8) == w:
+                d[a - B + 1] = hs['HWAITP'] & 255; d[a - B + 2] = hs['HWAITP'] >> 8; nw += 1
+    assert nw == 4, nw
     left = [a + B for a in range(len(d) - 1) if d[a] == 0xD3 and d[a + 1] in (0xA0, 0xA1) and not 0x8C00 <= a + B < 0x8C6E and not sym['PSGW'] <= a + B < sym['PSGW'] + 6]
     assert not left, [hex(a) for a in left]
     hm = hs['HALMON']

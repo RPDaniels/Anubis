@@ -527,6 +527,23 @@ CANF:   db 0
 CANON:  db 0
 CANMSG: db 0
 CANIX:  db 0
+LK:     db 0
+LVAL:   dw 0
+LSTP:   dw 0
+CANGATE:
+        ld a,(CANF)
+        cp 0Fh
+        jp z,CNTDOWN
+        ld a,(CANMSG)
+        or a
+        ret nz
+        inc a
+        ld (CANMSG),a
+        ld hl,CANTXT
+        ld de,1800h+{MSGROW}*32+{MSGCOL}
+        ld bc,{MSGLEN}
+        call 005Ch
+        jp HURTSND
 CANSAT: ds 5
 VARSEND:
         org {CODE4}h
@@ -658,19 +675,85 @@ CP1END:
 CANP2:
 {CANP2}
 CP2END:
-        org 9C40h
+        org 0A04Ch              ; NOP padding the game runs through (after the call at A049): jump over it
+        jp 0A0F4h
+LPREP:
+        ld hl,0CD4Bh            ; score (4 ASCII digits) -> binary
+        ld de,0
+        ld b,4
+LB1:    push bc
+        ex de,hl
+        ld b,h
+        ld c,l
+        add hl,hl
+        add hl,hl
+        add hl,bc
+        add hl,hl
+        ld a,(de)
+        sub '0'
+        ld c,a
+        ld b,0
+        add hl,bc
+        ex de,hl
+        inc hl
+        pop bc
+        djnz LB1
+        ex de,hl
+        ld (LVAL),hl
+        ld de,1                 ; drained per step: score / 24 + 1
+        ld bc,24
+LB2:    or a
+        sbc hl,bc
+        jr c,LB3
+        inc de
+        jr LB2
+LB3:    ld (LSTP),de
+        ret
+; one shade darker: every colour of the colour table and of the four sprites
+DARKEN: ld hl,2000h
+        ld de,9D00h
+        ld bc,32
+        call 0059h
+        ld hl,9D00h
+        ld b,32
+DK1:    ld a,(hl)
+        push af
+        rrca
+        rrca
+        rrca
+        rrca
+        call DKN
+        rlca
+        rlca
+        rlca
+        rlca
+        ld c,a
+        pop af
+        call DKN
+        or c
+        ld (hl),a
+        inc hl
+        djnz DK1
+        ld hl,9D00h
+        ld de,2000h
+        ld bc,32
+        call 005Ch
+        ld hl,1B03h
+        ld b,4
+DK2:    call 004Ah
+        call DKN
+        call 004Dh
+        ld de,4
+        add hl,de
+        djnz DK2
+        ret
+CODE11END:
+        org 9C10h
 ; ---- canopic jar fanfare: a C major chord on the three PSG voices gliding up an octave
 ; (one semitone every two frames), then held while it fades out
 CANFAN: ld hl,CFINIT
-CF0:    ld a,(hl)
-        cp 0FFh
-        jr z,CF1
+        call PSGTAB
         inc hl
-        ld e,(hl)
-        inc hl
-        call PSGW
-        jr CF0
-CF1:    inc hl
 CF2:    ld a,(hl)
         or a
         jr z,CF4
@@ -706,6 +789,26 @@ CF5:    ld e,d
         ld e,0
         call PSGW
         jp SNDOFF
+PSGTAB: ld a,(hl)               ; (register, value) pairs up to FF
+        cp 0FFh
+        ret z
+        inc hl
+        ld e,(hl)
+        inc hl
+        call PSGW
+        jr PSGTAB
+DKN:    and 0Fh                 ; colour -> next darker one
+        push hl
+        push de
+        ld e,a
+        ld d,0
+        ld hl,DMAP
+        add hl,de
+        ld a,(hl)
+        pop de
+        pop hl
+        ret
+DMAP:   db 0,1,12,2,1,4,1,5,6,8,8,10,1,6,5,14   ; at most 4 steps to black
 CFINIT: db 7,0B8h,8,0Dh,9,0Dh,10,0Dh,0FFh
 CFTAB:
 {CFTAB}
@@ -1091,81 +1194,111 @@ CR1:    ld a,{BLANK}
 CANTAB:
 {CANTAB}
 CANPTR: dw CANP0, CANP1, CANP2, CANP3
+B2A:    ld de,0CD4Bh            ; HL -> 4 ASCII digits
+        ld bc,-1000
+        call B2D
+        ld bc,-100
+        call B2D
+        ld bc,-10
+        call B2D
+        ld a,l
+        add a,'0'
+        ld (de),a
+        ret
+B2D:    ld a,'0'-1
+B2E:    inc a
+        add hl,bc
+        jr c,B2E
+        sbc hl,bc
+        ld (de),a
+        inc de
+        ret
 CODE5END:
         org {CODE6}h
 ; ---- touching the lotus: the riches drain away while the explorer flashes in colours
-CNTDOWN:
+CNTDOWN:                        ; touching the lotus: the C major chord sinks two octaves while
+        ld hl,CFINIT            ; the riches drain away and the screen fades to black (~3 s)
+        call PSGTAB
+        call LPREP
+        xor a
+        ld (LK),a
+LSTEP:  ld c,0                  ; steps 0-12: C5 down to C4; 13-24: C4 down to C3 (periods doubled)
+        ld a,(LK)
+        sub 13
+        jr nc,LS1
+        ld a,(LK)
+        neg
+        add a,12
+        jr LS2
+LS1:    neg
+        add a,11
+        inc c
+LS2:    ld l,a
+        ld h,0
+        add hl,hl
+        ld d,h
+        ld e,l
+        add hl,hl
+        add hl,de
+        ld de,CFTAB
+        add hl,de
         ld b,0
-CD1:    ld hl,0CD4Bh
-        ld c,4
-CDZ:    ld a,(hl)
-        cp '0'
-        jr nz,CDGO
+LS3:    ld e,(hl)
         inc hl
-        dec c
-        jr nz,CDZ
-        jr CDEND
-CDGO:   push bc
-        ld hl,0CD4Eh
-        ld c,5
-        call SUBD
+        ld d,(hl)
+        inc hl
+        bit 0,c
+        jr z,LS4
+        ex de,hl
+        add hl,hl
+        ex de,hl
+LS4:    ld a,b
+        call PSGW
+        inc b
+        ld a,b
+        ld e,d
+        call PSGW
+        inc b
+        ld a,b
+        cp 6
+        jr nz,LS3
+        ld hl,(LVAL)            ; the riches drain away
+        ld de,(LSTP)
+        or a
+        sbc hl,de
+        jr nc,LS5
+        ld hl,0
+LS5:    ld a,(LK)
+        cp 24
+        jr nz,LS6
+        ld hl,0
+LS6:    ld (LVAL),hl
+        call B2A
         ld hl,0CD4Bh
         ld de,1AABh
         ld bc,4
         call 005Ch
-        pop bc
-        inc b
-        ld a,b
-        and 0Fh
-        cp 2
-        jr nc,CDC
-        add a,2
-CDC:    ld hl,1B03h
-        call 004Dh
-        ld a,b                  ; PSG tone A: falling-coins blip
-        add a,a
-        add a,a
-        and 7Fh
-        add a,40h
-        ld e,a
-        xor a
-        call PSGW
-        ld a,1
+        ld a,(LK)               ; one shade darker every 6 steps (5, 11, 17, 23: black)
+        inc a
+LS7:    sub 6
+        jr nc,LS7
+        cp 0FAh
+        call z,DARKEN
+        ld b,6
+        call WAITJ
+        ld hl,LK
+        inc (hl)
+        ld a,(hl)
+        cp 25
+        jp nz,LSTEP
+        ld a,10
         ld e,0
         call PSGW
-        ld a,7
-        ld e,0BEh
-        call PSGW
-        ld a,8
-        ld e,0Ch
-        call PSGW
-        call PSGDLY
-        jr CD1
-CDEND:  call SNDOFF
-        ld hl,1B03h
-        ld a,0Fh
-        call 004Dh
-        ld a,(JIFFY)
-        add a,60
-        ld e,a
-CDW:    ld a,(JIFFY)
-        cp e
-        jr nz,CDW
+        call SNDOFF
+        ld b,25
+        call WAITJ
         jp ENDING
-SUBD:   ld a,(hl)               ; subtract C from the digit at (HL), borrowing leftwards
-        sub c
-        cp '0'
-        jr nc,SB2
-        add a,10
-        ld (hl),a
-        dec hl
-        ld c,1
-        ld a,l
-        cp 4Ah
-        ret z
-        jr SUBD
-SB2:    ld (hl),a
-        ret
+LOTEND:
 ; ---- pickups: ankh 1x2 (2C/2D) or green scarab 2x2 (C0-C3)
 PKDRAW: ld a,(PKCODE)
         and 40h
@@ -1207,20 +1340,6 @@ PE2:    ld de,32
         ret nz
         inc hl
         jp 004Dh
-CANGATE:
-        ld a,(CANF)
-        cp 0Fh
-        jp z,CNTDOWN
-        ld a,(CANMSG)
-        or a
-        ret nz
-        inc a
-        ld (CANMSG),a
-        ld hl,CANTXT
-        ld de,1800h+{MSGROW}*32+{MSGCOL}
-        ld bc,{MSGLEN}
-        call 005Ch
-        jp HURTSND
 CODE6END:
         org {CODE7}h
 NEWROOM:
@@ -1655,7 +1774,7 @@ def post_patch(d):
     print('code7 %04X-%04X' % (CODE7, c7 - 1))
     assert c7 <= CODE7_END
     for nm, lo, hi in (('DATA2', DATA2, DATA2_END), ('CODE9', CODE9, CODE9_END), ('CODE10', CODE10, CODE10_END),
-                       ('CP0', 0xD6E0, 0xD710), ('CP1', 0xD7A0, 0xD7D0), ('CP2', 0xD8B0, 0xD8E0), ('CP3', 0x9C40, 0x9D00)):
+                       ('CP0', 0xD6E0, 0xD710), ('CP1', 0xD7A0, 0xD7D0), ('CP2', 0xD8B0, 0xD8E0), ('CP3', 0x9C10, 0x9D00), ('CODE11', 0xA04B, 0xA0D3)):
         e = sym[nm + 'END']
         print('%s %04X-%04X (limit %04X)' % (nm, lo, e - 1, hi))
         assert e <= hi
