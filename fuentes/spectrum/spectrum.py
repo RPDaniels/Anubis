@@ -231,10 +231,15 @@ XL3:    cp 20h
         ld a,4
         or a
         ret
-XL4:    cp 38h
+XL4:    cp 38h                  ; sprite patterns 0-103 (3800-3B3F; 100 = the canopic jar)
         jr c,XLN
         cp 3Bh
+        jr c,XL5
+        jr nz,XLN
+        ld a,l
+        cp 40h
         jr nc,XLN
+XL5:
         push de
         ld de,SHSPR-3800h
         add hl,de

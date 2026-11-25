@@ -390,16 +390,18 @@ def bfs(info, start):
     return dist
 def canopic_rooms(m, entries_for, objdefs):
     """four reachable rooms, far from the start and from each other, each with a free floor spot
-    (2 columns, rows 11-12 open over a solid row 13, away from the explorer's centre columns).
+    (2 columns, rows 11-12 open over a solid row 13, away from the explorer's centre columns), with no falling drop.
     Returns [(room, column)] in the order Imsety, Hapy, Duamutef, Qebehsenuef."""
     global _CANOPIC
     if _CANOPIC: return _CANOPIC
     import gen
     info = connectivity(m)
     d0 = bfs(info, 0)
+    codes = room_codes(m, type_slots(m))
     spots = {}
     for r in d0:
         if r in (0, gen.LOTUS_ROOM) or r in gen.MULTI_PICKUPS: continue
+        if (codes[r] >> 3) & 7 in (6, 7): continue      # no falling drop: on the Spectrum it hides the jar
         nt = sim.compose(m, r, entries=entries_for(r), objdefs=objdefs)[0x1800:0x1b00]
         cands = []
         for c in range(4, 27):
