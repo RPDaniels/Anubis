@@ -1181,11 +1181,11 @@ CB1:    sla c
         dec a
         jr nz,CB1
         ret
-CANRST: ld hl,0CD39h            ; new game: empty slots
+CANRST: ld hl,0CD39h            ; new game: four empty jar slots
         ld de,0CD59h
         ld b,4
-CR1:    ld a,{BLANK}
-        ld (hl),a
+CR1:    ld (hl),{SLOTH}             ; outline of a jar still to be found
+        ld a,{SLOTB}
         ld (de),a
         inc hl
         inc de
@@ -1736,7 +1736,7 @@ def post_patch(d):
     print('canopic jars:', ', '.join('%s room %d col %d' % (n, r, c) for n, (r, c) in zip(canopic_art.NAMES, can)))
     canpat = []
     for n in canopic_art.NAMES: canpat += monsters.sprite_bytes(canopic_art.sprite(n))
-    src = ASM.format(CFTAB=db_lines(chord_table()), CANTAB=db_lines([v for rc in can for v in rc]), CANP0=db_lines(canpat[0:32]), CANP1=db_lines(canpat[32:64]), CANP2=db_lines(canpat[64:96]), CANP3=db_lines(canpat[96:128]), HEADS=','.join('%d' % c for c in canopic_art.HEAD_CHARS), CANMSGTXT=canopic_art.MESSAGE, MSGLEN=len(canopic_art.MESSAGE), MSGCOL=(32 - len(canopic_art.MESSAGE)) // 2, BODYC=canopic_art.BODY_CHAR, MSGROW=3, CODE9='0%X' % CODE9, CODE10='0%X' % CODE10, DATA2='0%X' % DATA2, ETXT=tseg(ending.TEXT, etr), GTXT=tseg(ending.GO_TEXT, etr), CODE8='0%X' % CODE8, PKX2=db_lines(pkx2) if pkx2 else '', CODE7='0%X' % CODE7, PATS2=db_lines(monsters.pattern_data2()), CODE6='0%X' % CODE6, CODE5='0%X' % CODE5, PROMPT=0x1800 + 14 * 32 + 9, D0=0xA8, CUR=0xB2,
+    src = ASM.format(SLOTH=canopic_art.SLOT_HEAD, SLOTB=canopic_art.SLOT_BODY, CFTAB=db_lines(chord_table()), CANTAB=db_lines([v for rc in can for v in rc]), CANP0=db_lines(canpat[0:32]), CANP1=db_lines(canpat[32:64]), CANP2=db_lines(canpat[64:96]), CANP3=db_lines(canpat[96:128]), HEADS=','.join('%d' % c for c in canopic_art.HEAD_CHARS), CANMSGTXT=canopic_art.MESSAGE, MSGLEN=len(canopic_art.MESSAGE), MSGCOL=(32 - len(canopic_art.MESSAGE)) // 2, BODYC=canopic_art.BODY_CHAR, MSGROW=3, CODE9='0%X' % CODE9, CODE10='0%X' % CODE10, DATA2='0%X' % DATA2, ETXT=tseg(ending.TEXT, etr), GTXT=tseg(ending.GO_TEXT, etr), CODE8='0%X' % CODE8, PKX2=db_lines(pkx2) if pkx2 else '', CODE7='0%X' % CODE7, PATS2=db_lines(monsters.pattern_data2()), CODE6='0%X' % CODE6, CODE5='0%X' % CODE5, PROMPT=0x1800 + 14 * 32 + 9, D0=0xA8, CUR=0xB2,
                      TXT=','.join(map(str, txt)), M5TAB=db_lines([x for p in m5 for x in p]), M5COUNT=len(m5),
                      CODE4='0%X' % CODE4, LROOM=gen.LOTUS_ROOM, LCY=lr * 8 + 12, LCX=lc * 8 + 16,
                      NPAT=len(ent_pats), ECOL=db_lines(ecol), EPAT=db_lines(epat), ESEG=eseg,

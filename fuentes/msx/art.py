@@ -395,5 +395,7 @@ import canopic_art as _ca
 for _n, _c in zip(_ca.NAMES, _ca.HEAD_CHARS):
     T[_c] = list(_ca.HEADS8[_n])
 T[_ca.BODY_CHAR] = list(_ca.BODY8)
+T[_ca.SLOT_HEAD] = list(_ca.SLOT8)
+T[_ca.SLOT_BODY] = list(_ca.SLOTB8)
 for _g in (0x40, 0x48, 0x50):
     GROUP_COLORS[_g >> 3] = (15, 1)
