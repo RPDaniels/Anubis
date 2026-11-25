@@ -52,5 +52,8 @@ HEADS8 = {
  'Qebehsenuef': ['..###...', '.#####..', '.#.####.', '.######.', '..###.#.', '...#....', '.#####..', '#######.'],
 }
 BODY8 = ['#.#.#.#.', '#######.', '#######.', '.#####..', '.#####..', '..###...', '.#####..', '........']
-HEAD_CHARS = [0x9C, 0x9D, 0x9E, 0x9F]   # free characters, light blue on black (group 0x98)
-BODY_CHAR = 0xEC                        # free, same colours (group 0xE8)
+HEAD_CHARS = [0x40, 0x46, 0x4A, 0x4B]   # letters @ F J K: no text of the game uses them (groups 0x40/0x48, white)
+BODY_CHAR = 0x57                        # letter W, also unused (group 0x50, white)
+# lotus message (it must not use the letters above)
+MESSAGE = 'NECESITAS LOS CUATRO VASOS'
+assert not set(MESSAGE) & {chr(x) for x in HEAD_CHARS + [BODY_CHAR]}

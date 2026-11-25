@@ -56,12 +56,12 @@ def room_img(r):
         sat += [0x48, spid2[bb - 6], 88, 7]
     elif bb == 3:
         k = a % 3 + 1; lo, hi = segs2[1 - aseg]; sat += [0x57, (lo + hi) // 2, monsters.BASES[k] + 8, monsters.COLORS[k]]
-    if r in JARS:   # canopic jar: gold sprite 25 at y 87
+    if r in JARS:   # canopic jar: white sprite 25 at y 87
         jc, k = JARS[r]
         rows = canopic_art.sprite(canopic_art.NAMES[k])
         sp = monsters.sprite_bytes(rows)
         v[0x3800 + 25*32:0x3800 + 26*32] = bytes(sp)
-        sat += [87, jc * 8, 100, 10]
+        sat += [87, jc * 8, 100, 15]
     sat += [208]
     v[0x1b00:0x1b00 + len(sat)] = bytes(sat)
     render(v, REGS, '_tmp_render.png', sprites=True, scale=1)

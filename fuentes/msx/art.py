@@ -389,9 +389,11 @@ mirror_tile(0xBA, 0xBC); mirror_tile(0xB9, 0xBD); mirror_tile(0xBB, 0xBE)
 OBJ['web_l'] = (2, 2, [0xB9, 0xBA, 0xBB, 0xFF])
 OBJ['web_r'] = (2, 2, [0xBC, 0xBD, 0xFF, 0xBE])
 
-# ---------------------------------------------------------------- canopic jars: status-bar icons (blue faience)
+# ---------------------------------------------------------------- canopic jars: status-bar icons (white)
+# unused letters; the letter groups only show the lotus message during the game (the endings load their own colours)
 import canopic_art as _ca
 for _n, _c in zip(_ca.NAMES, _ca.HEAD_CHARS):
     T[_c] = list(_ca.HEADS8[_n])
 T[_ca.BODY_CHAR] = list(_ca.BODY8)
-GROUP_COLORS[0x98 >> 3] = (5, 1)
+for _g in (0x40, 0x48, 0x50):
+    GROUP_COLORS[_g >> 3] = (15, 1)

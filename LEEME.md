@@ -22,7 +22,7 @@ para ZX Spectrum 48K y una versión web jugable en el navegador.
 - **Mover:** cursores (en Spectrum también `Q` `A` `O` `P` o `5` `6` `7` `8`, y joystick Kempston con la opción 2).
   El explorador lleva un jet pack para subir por los pozos.
 - **Objetos:** escarabajo verde = +25 puntos; ankh = +1 vida. Se empieza con 10 vidas.
-- **Vasos canopos:** Imsety, Hapy, Duamutef y Qebehsenuef están escondidos en cuatro pantallas lejanas (vasos dorados que brillan). Al cogerlos aparecen en azul en el marcador. El loto solo se abre con los cuatro; si falta alguno sale el aviso *FALTAN VASOS CANOPOS*. Sus pantallas están marcadas en `docs/mapa_laberinto.png`.
+- **Vasos canopos:** Imsety, Hapy, Duamutef y Qebehsenuef están escondidos en cuatro pantallas lejanas (vasos blancos que brillan). Al cogerlos aparecen, también en blanco, en el marcador. El loto solo se abre con los cuatro; si falta alguno sale el aviso *NECESITAS LOS CUATRO VASOS*. Sus pantallas están marcadas en `docs/mapa_laberinto.png`.
 - **Monstruos:** serpientes, escorpiones, momias, arañas, murciélagos y gotas. Tocarlos quita una vida.
 - **Final:** el loto cian gigante en la pantalla 240, al fondo de un pasillo sin salida. Al llegar, tus riquezas
   se descuentan: *"no te llevarás tus riquezas al otro mundo"*.

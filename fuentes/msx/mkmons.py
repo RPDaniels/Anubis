@@ -162,11 +162,15 @@ FA1:    add a,a
         djnz FA1
         ret
 CANHUD: ld a,(CANIX)            ; status bar: head + body icon (screen and template)
+        ld e,a
+        ld d,0
+        ld hl,CANHC
+        add hl,de
+        ld c,(hl)               ; this jar's head character
         add a,99h
         ld l,a
         ld h,1Ah
-        ld a,(CANIX)
-        add a,{HEAD0}
+        ld a,c
         call 004Dh
         ld a,(CANIX)
         add a,0B9h
@@ -178,13 +182,12 @@ CANHUD: ld a,(CANIX)            ; status bar: head + body icon (screen and templ
         add a,39h
         ld l,a
         ld h,0CDh
-        ld a,(CANIX)
-        add a,{HEAD0}
-        ld (hl),a
+        ld (hl),c
         ld de,20h
         add hl,de
         ld (hl),{BODYC}
         ret
+CANHC:  db {HEADS}
 CODE2END:
         org {CODE}h
 GAMESTART:
@@ -466,11 +469,11 @@ PKX2:
 CANCHK: ld a,(CANON)
         or a
         ret z
-        ld a,(TICK)             ; the jar glimmers (gold / light yellow)
+        ld a,(TICK)             ; the jar glimmers (white / grey)
         and 8
-        ld a,10
+        ld a,15
         jr z,CK0
-        ld a,11
+        ld a,14
 CK0:    ld hl,1B0Fh
         call 004Dh
         ld hl,1B00h             ; touched?
@@ -505,7 +508,7 @@ CK2:    cp 12
         call CNHIDE
         call CANHUD
         jp CANFAN
-CANTXT: db 'FALTAN VASOS CANOPOS'
+CANTXT: db '{CANMSGTXT}'
 CANP3:
 {CANP3}
 CODE3END:
@@ -1046,7 +1049,7 @@ CN2:    call CANBIT
         ld (CANSAT),a
         ld a,100
         ld (CANSAT+2),a
-        ld a,10
+        ld a,15
         ld (CANSAT+3),a
         ld a,0D0h
         ld (CANSAT+4),a
@@ -1214,8 +1217,8 @@ CANGATE:
         inc a
         ld (CANMSG),a
         ld hl,CANTXT
-        ld de,1800h+{MSGROW}*32+6
-        ld bc,20
+        ld de,1800h+{MSGROW}*32+{MSGCOL}
+        ld bc,{MSGLEN}
         call 005Ch
         jp HURTSND
 CODE6END:
@@ -1614,7 +1617,7 @@ def post_patch(d):
     print('canopic jars:', ', '.join('%s room %d col %d' % (n, r, c) for n, (r, c) in zip(canopic_art.NAMES, can)))
     canpat = []
     for n in canopic_art.NAMES: canpat += monsters.sprite_bytes(canopic_art.sprite(n))
-    src = ASM.format(CFTAB=db_lines(chord_table()), CANTAB=db_lines([v for rc in can for v in rc]), CANP0=db_lines(canpat[0:32]), CANP1=db_lines(canpat[32:64]), CANP2=db_lines(canpat[64:96]), CANP3=db_lines(canpat[96:128]), HEAD0=canopic_art.HEAD_CHARS[0], BODYC=canopic_art.BODY_CHAR, MSGROW=3, CODE9='0%X' % CODE9, CODE10='0%X' % CODE10, DATA2='0%X' % DATA2, ETXT=tseg(ending.TEXT, etr), GTXT=tseg(ending.GO_TEXT, etr), CODE8='0%X' % CODE8, PKX2=db_lines(pkx2) if pkx2 else '', CODE7='0%X' % CODE7, PATS2=db_lines(monsters.pattern_data2()), CODE6='0%X' % CODE6, CODE5='0%X' % CODE5, PROMPT=0x1800 + 14 * 32 + 9, D0=0xA8, CUR=0xB2,
+    src = ASM.format(CFTAB=db_lines(chord_table()), CANTAB=db_lines([v for rc in can for v in rc]), CANP0=db_lines(canpat[0:32]), CANP1=db_lines(canpat[32:64]), CANP2=db_lines(canpat[64:96]), CANP3=db_lines(canpat[96:128]), HEADS=','.join('%d' % c for c in canopic_art.HEAD_CHARS), CANMSGTXT=canopic_art.MESSAGE, MSGLEN=len(canopic_art.MESSAGE), MSGCOL=(32 - len(canopic_art.MESSAGE)) // 2, BODYC=canopic_art.BODY_CHAR, MSGROW=3, CODE9='0%X' % CODE9, CODE10='0%X' % CODE10, DATA2='0%X' % DATA2, ETXT=tseg(ending.TEXT, etr), GTXT=tseg(ending.GO_TEXT, etr), CODE8='0%X' % CODE8, PKX2=db_lines(pkx2) if pkx2 else '', CODE7='0%X' % CODE7, PATS2=db_lines(monsters.pattern_data2()), CODE6='0%X' % CODE6, CODE5='0%X' % CODE5, PROMPT=0x1800 + 14 * 32 + 9, D0=0xA8, CUR=0xB2,
                      TXT=','.join(map(str, txt)), M5TAB=db_lines([x for p in m5 for x in p]), M5COUNT=len(m5),
                      CODE4='0%X' % CODE4, LROOM=gen.LOTUS_ROOM, LCY=lr * 8 + 12, LCX=lc * 8 + 16,
                      NPAT=len(ent_pats), ECOL=db_lines(ecol), EPAT=db_lines(epat), ESEG=eseg,
