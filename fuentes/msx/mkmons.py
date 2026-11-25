@@ -46,6 +46,24 @@ SAVESP: dw 0
 MON0:   ds 8
 MON1:   ds 8
 SATB:   ds 8
+WK4:    push hl
+        push bc
+        ld hl,9D00h             ; the row comes back
+        ld de,1800h+{WROW}*32
+        ld bc,32
+        call 005Ch
+        pop bc
+        pop hl
+        ld a,c
+        or a
+        ret z                   ; ENTER alone: back to the game
+        ld a,l
+        ld (0F304h),a
+        call 0A377h             ; draw the new screen (the game's own routine)
+        ld hl,0F300h            ; explorer at the starting spot
+        ld de,1B00h
+        ld bc,2
+        jp 005Ch
 DATAEND:
 
         org {CODE2}h
@@ -259,6 +277,7 @@ MONSTERS:
 MS0:    call PKCHK
         call ENDCHK
         call CANCHK
+        call WARPK
         ld a,(JIFFY)
         ld b,a
         ld a,(LASTJ)
@@ -425,6 +444,7 @@ PATS2:
 {PATS2}
 ECOL:
 {ECOL}
+WTXT:   db 'PANTALLA:'
 CODEEND:
         org {CODE3}h
 PKTAB:
@@ -702,6 +722,54 @@ EJ1:    push af
         cp 0D0h
         jr nz,EJ1
         jp EJN2
+; ---- secret: key 5 during the game (9 on the Spectrum) asks for a screen number and jumps there
+WARPK:  ld a,0F0h               ; keyboard row 0 (the Spectrum reads key 9 here)
+        out (0AAh),a
+        in a,(0A9h)
+        bit 5,a
+        ret nz
+WK1:    ld a,0F0h               ; wait until it is released
+        out (0AAh),a
+        in a,(0A9h)
+        bit 5,a
+        jr z,WK1
+        call WPROMPT
+        ld hl,0                 ; HL = number, C = digits, DE = where the next digit goes
+        ld c,l
+        ld de,1800h+{WROW}*32+{WCOL}+10
+WK2:    call 009Fh              ; CHGET
+        cp 0Dh
+        jp z,WK4
+        sub '0'
+        cp 10
+        jr nc,WK2
+        ld b,a
+        ld a,c
+        cp 3
+        jr nc,WK2
+        inc c
+        ld a,b
+        add a,'0'
+        ex de,hl
+        call 004Dh
+        inc hl
+        ex de,hl
+        push de
+        ld d,h
+        ld e,l
+        add hl,hl
+        add hl,hl
+        add hl,de
+        add hl,hl
+        ld e,b
+        ld d,0
+        add hl,de
+        pop de
+        inc h                   ; above 255: 255
+        dec h
+        jr z,WK2
+        ld hl,255
+        jr WK2
 CODE12END:
         org 0A04Ch              ; NOP padding the game runs through (after the call at A049): jump over it
         jp 0A0F4h
@@ -1579,6 +1647,17 @@ MM9:    pop hl
         jp SNDOFF
 AXTAB:  db 0,0,0,0,1,0,1
 PBTAB:  db 0,24,40,56,72,80,88
+WPROMPT:
+        call 0156h              ; KILBUF
+        ld hl,1800h+{WROW}*32   ; keep the row under the prompt
+        ld de,9D00h
+        ld bc,32
+        call 0059h
+        ld hl,WTXT
+        ld de,1800h+{WROW}*32+{WCOL}
+        ld bc,9
+        call 005Ch
+        ret
 CODE7END:
         org {CODE8}h
 ; ---- up to three pickups per room (slot: act, code, x, y, addr(2), flagptr(2), mask)
@@ -1781,7 +1860,7 @@ def post_patch(d):
     print('canopic jars:', ', '.join('%s room %d col %d' % (n, r, c) for n, (r, c) in zip(canopic_art.NAMES, can)))
     canpat = []
     for n in canopic_art.NAMES: canpat += monsters.sprite_bytes(canopic_art.sprite(n))
-    src = ASM.format(EJROW=14, EJCOL=16, SLOTH=canopic_art.SLOT_HEAD, SLOTB=canopic_art.SLOT_BODY, CFTAB=db_lines(chord_table()), CANTAB=db_lines([v for rc in can for v in rc]), CANP0=db_lines(canpat[0:32]), CANP1=db_lines(canpat[32:64]), CANP2=db_lines(canpat[64:96]), CANP3=db_lines(canpat[96:128]), HEADS=','.join('%d' % c for c in canopic_art.HEAD_CHARS), CANMSGTXT=canopic_art.MESSAGE, MSGLEN=len(canopic_art.MESSAGE), MSGCOL=(32 - len(canopic_art.MESSAGE)) // 2, BODYC=canopic_art.BODY_CHAR, MSGROW=3, CODE9='0%X' % CODE9, CODE10='0%X' % CODE10, DATA2='0%X' % DATA2, ETXT=tseg(ending.TEXT, etr), GTXT=tseg(ending.GO_TEXT, etr), CODE8='0%X' % CODE8, PKX2=db_lines(pkx2) if pkx2 else '', CODE7='0%X' % CODE7, PATS2=db_lines(monsters.pattern_data2()), CODE6='0%X' % CODE6, CODE5='0%X' % CODE5, PROMPT=0x1800 + 14 * 32 + 9, D0=0xA8, CUR=0xB2,
+    src = ASM.format(WROW=3, WCOL=10, EJROW=14, EJCOL=16, SLOTH=canopic_art.SLOT_HEAD, SLOTB=canopic_art.SLOT_BODY, CFTAB=db_lines(chord_table()), CANTAB=db_lines([v for rc in can for v in rc]), CANP0=db_lines(canpat[0:32]), CANP1=db_lines(canpat[32:64]), CANP2=db_lines(canpat[64:96]), CANP3=db_lines(canpat[96:128]), HEADS=','.join('%d' % c for c in canopic_art.HEAD_CHARS), CANMSGTXT=canopic_art.MESSAGE, MSGLEN=len(canopic_art.MESSAGE), MSGCOL=(32 - len(canopic_art.MESSAGE)) // 2, BODYC=canopic_art.BODY_CHAR, MSGROW=3, CODE9='0%X' % CODE9, CODE10='0%X' % CODE10, DATA2='0%X' % DATA2, ETXT=tseg(ending.TEXT, etr), GTXT=tseg(ending.GO_TEXT, etr), CODE8='0%X' % CODE8, PKX2=db_lines(pkx2) if pkx2 else '', CODE7='0%X' % CODE7, PATS2=db_lines(monsters.pattern_data2()), CODE6='0%X' % CODE6, CODE5='0%X' % CODE5, PROMPT=0x1800 + 14 * 32 + 9, D0=0xA8, CUR=0xB2,
                      TXT=','.join(map(str, txt)), M5TAB=db_lines([x for p in m5 for x in p]), M5COUNT=len(m5),
                      CODE4='0%X' % CODE4, LROOM=gen.LOTUS_ROOM, LCY=lr * 8 + 12, LCX=lc * 8 + 16,
                      NPAT=len(ent_pats), ECOL=db_lines(ecol), EPAT=db_lines(epat), ESEG=eseg,

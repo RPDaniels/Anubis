@@ -1948,6 +1948,15 @@ GS9:    ld a,b
         pop bc
         ret
 DIRTAB: db 0,1,5,0,7,8,6,7,3,2,4,3,0,1,5,0
+; WKEY: the in-game screen jump uses key 9 (5 is 'left' here): A bit 5 = 0 while 9 is pressed
+WKEY:   ld a,0EFh
+        in a,(0FEh)
+        rla
+        rla
+        rla
+        rla
+        or 0DFh
+        ret
 LOEND:
 '''
 
@@ -1997,6 +2006,11 @@ def build(src_bin='anubis_new.bin', mons_sym='mons.sym'):
             if j < 0: break
             d[j:j + len(new)] = new; cnt += 1; i = j + 1
         return cnt
+    wk = hs['WKEY']; nk = 0
+    for a in range(sym['WARPK'], sym['WARPK'] + 32):
+        if d[a - B:a - B + 6] == bytes([0x3E, 0xF0, 0xD3, 0xAA, 0xDB, 0xA9]):
+            d[a - B:a - B + 6] = bytes([0xCD, wk & 255, wk >> 8, 0, 0, 0]); nk += 1
+    assert nk == 2, nk
     k = hs['KROW0']
     c1 = patch_seq(bytes([0x3E, 0xF0, 0xD3, 0xAA, 0xDB, 0xA9]), bytes([0xCD, k & 255, k >> 8, 0, 0, 0]))
     j = hs['JIF']
